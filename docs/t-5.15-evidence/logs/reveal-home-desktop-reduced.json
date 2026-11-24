@@ -1,0 +1,30 @@
+{
+  "route": "/",
+  "reduced": true,
+  "viewport": [
+    1440,
+    900
+  ],
+  "tracked": 16,
+  "animated": 0,
+  "static": 16,
+  "animatedDetail": [],
+  "staticDetail": [
+    "Pembagi tugas kelompok",
+    "Bagi tugas",
+    "kelompok",
+    "berdasarkan data,",
+    "bukan tebakan.",
+    "Masukkan anggota, skill,",
+    "1Buat proyekMulai dari s",
+    "Bobot skor0,40K + 0,30S ",
+    "01Daftarkan anggotaNama,",
+    "02Susun tugasPakai templ",
+    "03Analisis teksGemini me",
+    "04Sesuaikan hasilGeser b",
+    "Komposisi skor",
+    "Setiap rekomendasi bisa",
+    "Anda periksa",
+    "(empty)"
+  ]
+}

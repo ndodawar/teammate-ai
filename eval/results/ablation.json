@@ -1,0 +1,415 @@
+{
+  "summary": {
+    "note": "K di sini adalah PROXY deterministik (bukan embedding live). Ablation live = BLOCKED (tanpa GEMINI_API_KEY).",
+    "scenarios": 20,
+    "totalTasks": 35,
+    "movedOwnersTotal": 9,
+    "movedFraction": 0.2571,
+    "coverageDeltaMean": 0,
+    "stdDevDeltaMean": -0.2018,
+    "fitDeltaMean": -0.0267,
+    "liveAblation": "BLOCKED"
+  },
+  "perScenario": [
+    {
+      "scenarioId": "S01",
+      "tasks": 3,
+      "movedOwners": 2,
+      "coverage": {
+        "withK": 1,
+        "noK": 1,
+        "delta": 0
+      },
+      "stdDev": {
+        "withK": 0.9428,
+        "noK": 0.9428,
+        "delta": 0
+      },
+      "fit": {
+        "withK": 0.65,
+        "noK": 0.7333,
+        "delta": -0.0833
+      }
+    },
+    {
+      "scenarioId": "S02",
+      "tasks": 3,
+      "movedOwners": 0,
+      "coverage": {
+        "withK": 1,
+        "noK": 1,
+        "delta": 0
+      },
+      "stdDev": {
+        "withK": 11.3137,
+        "noK": 11.3137,
+        "delta": 0
+      },
+      "fit": {
+        "withK": 0.8333,
+        "noK": 0.8333,
+        "delta": 0
+      }
+    },
+    {
+      "scenarioId": "S03",
+      "tasks": 2,
+      "movedOwners": 1,
+      "coverage": {
+        "withK": 1,
+        "noK": 1,
+        "delta": 0
+      },
+      "stdDev": {
+        "withK": 4.1096,
+        "noK": 4.1096,
+        "delta": 0
+      },
+      "fit": {
+        "withK": 0.65,
+        "noK": 0.6,
+        "delta": 0.05
+      }
+    },
+    {
+      "scenarioId": "S04",
+      "tasks": 2,
+      "movedOwners": 1,
+      "coverage": {
+        "withK": 1,
+        "noK": 1,
+        "delta": 0
+      },
+      "stdDev": {
+        "withK": 5.2493,
+        "noK": 10.3709,
+        "delta": -5.1216
+      },
+      "fit": {
+        "withK": 0.65,
+        "noK": 0.65,
+        "delta": 0
+      }
+    },
+    {
+      "scenarioId": "S05",
+      "tasks": 1,
+      "movedOwners": 0,
+      "coverage": {
+        "withK": 1,
+        "noK": 1,
+        "delta": 0
+      },
+      "stdDev": {
+        "withK": 2.8284,
+        "noK": 2.8284,
+        "delta": 0
+      },
+      "fit": {
+        "withK": 0.9,
+        "noK": 0.9,
+        "delta": 0
+      }
+    },
+    {
+      "scenarioId": "S06",
+      "tasks": 1,
+      "movedOwners": 0,
+      "coverage": {
+        "withK": 0,
+        "noK": 0,
+        "delta": 0
+      },
+      "stdDev": {
+        "withK": 3,
+        "noK": 3,
+        "delta": 0
+      },
+      "fit": {
+        "withK": 0.25,
+        "noK": 0.25,
+        "delta": 0
+      }
+    },
+    {
+      "scenarioId": "S07",
+      "tasks": 1,
+      "movedOwners": 0,
+      "coverage": {
+        "withK": 0,
+        "noK": 0,
+        "delta": 0
+      },
+      "stdDev": {
+        "withK": 4,
+        "noK": 4,
+        "delta": 0
+      },
+      "fit": {
+        "withK": 0.325,
+        "noK": 0.325,
+        "delta": 0
+      }
+    },
+    {
+      "scenarioId": "S08",
+      "tasks": 1,
+      "movedOwners": 0,
+      "coverage": {
+        "withK": 1,
+        "noK": 1,
+        "delta": 0
+      },
+      "stdDev": {
+        "withK": 5,
+        "noK": 5,
+        "delta": 0
+      },
+      "fit": {
+        "withK": 0.65,
+        "noK": 0.65,
+        "delta": 0
+      }
+    },
+    {
+      "scenarioId": "S09",
+      "tasks": 1,
+      "movedOwners": 0,
+      "coverage": {
+        "withK": 1,
+        "noK": 1,
+        "delta": 0
+      },
+      "stdDev": {
+        "withK": 3,
+        "noK": 3,
+        "delta": 0
+      },
+      "fit": {
+        "withK": 0.55,
+        "noK": 0.55,
+        "delta": 0
+      }
+    },
+    {
+      "scenarioId": "S10",
+      "tasks": 1,
+      "movedOwners": 0,
+      "coverage": {
+        "withK": 1,
+        "noK": 1,
+        "delta": 0
+      },
+      "stdDev": {
+        "withK": 14.1421,
+        "noK": 14.1421,
+        "delta": 0
+      },
+      "fit": {
+        "withK": 0.65,
+        "noK": 0.65,
+        "delta": 0
+      }
+    },
+    {
+      "scenarioId": "S11",
+      "tasks": 1,
+      "movedOwners": 0,
+      "coverage": {
+        "withK": 0.6666666666666666,
+        "noK": 0.6666666666666666,
+        "delta": 0
+      },
+      "stdDev": {
+        "withK": 4,
+        "noK": 4,
+        "delta": 0
+      },
+      "fit": {
+        "withK": 0.5167,
+        "noK": 0.5167,
+        "delta": 0
+      }
+    },
+    {
+      "scenarioId": "S12",
+      "tasks": 3,
+      "movedOwners": 0,
+      "coverage": {
+        "withK": 1,
+        "noK": 1,
+        "delta": 0
+      },
+      "stdDev": {
+        "withK": 12,
+        "noK": 12,
+        "delta": 0
+      },
+      "fit": {
+        "withK": 0.75,
+        "noK": 0.75,
+        "delta": 0
+      }
+    },
+    {
+      "scenarioId": "S13",
+      "tasks": 2,
+      "movedOwners": 0,
+      "coverage": {
+        "withK": 1,
+        "noK": 1,
+        "delta": 0
+      },
+      "stdDev": {
+        "withK": 0,
+        "noK": 0,
+        "delta": 0
+      },
+      "fit": {
+        "withK": 0.7,
+        "noK": 0.7,
+        "delta": 0
+      }
+    },
+    {
+      "scenarioId": "S14",
+      "tasks": 3,
+      "movedOwners": 2,
+      "coverage": {
+        "withK": 1,
+        "noK": 1,
+        "delta": 0
+      },
+      "stdDev": {
+        "withK": 5.2493,
+        "noK": 5.2493,
+        "delta": 0
+      },
+      "fit": {
+        "withK": 0.65,
+        "noK": 0.65,
+        "delta": 0
+      }
+    },
+    {
+      "scenarioId": "S15",
+      "tasks": 1,
+      "movedOwners": 0,
+      "coverage": {
+        "withK": 1,
+        "noK": 1,
+        "delta": 0
+      },
+      "stdDev": {
+        "withK": 4,
+        "noK": 4,
+        "delta": 0
+      },
+      "fit": {
+        "withK": 1,
+        "noK": 1,
+        "delta": 0
+      }
+    },
+    {
+      "scenarioId": "S16",
+      "tasks": 1,
+      "movedOwners": 0,
+      "coverage": {
+        "withK": 0.5,
+        "noK": 0.5,
+        "delta": 0
+      },
+      "stdDev": {
+        "withK": 3.5,
+        "noK": 3.5,
+        "delta": 0
+      },
+      "fit": {
+        "withK": 0.4,
+        "noK": 0.4,
+        "delta": 0
+      }
+    },
+    {
+      "scenarioId": "S17",
+      "tasks": 1,
+      "movedOwners": 1,
+      "coverage": {
+        "withK": 1,
+        "noK": 1,
+        "delta": 0
+      },
+      "stdDev": {
+        "withK": 2.5,
+        "noK": 2.5,
+        "delta": 0
+      },
+      "fit": {
+        "withK": 0.4,
+        "noK": 0.9,
+        "delta": -0.5
+      }
+    },
+    {
+      "scenarioId": "S18",
+      "tasks": 2,
+      "movedOwners": 0,
+      "coverage": {
+        "withK": 1,
+        "noK": 1,
+        "delta": 0
+      },
+      "stdDev": {
+        "withK": 13,
+        "noK": 13,
+        "delta": 0
+      },
+      "fit": {
+        "withK": 0.75,
+        "noK": 0.75,
+        "delta": 0
+      }
+    },
+    {
+      "scenarioId": "S19",
+      "tasks": 1,
+      "movedOwners": 0,
+      "coverage": {
+        "withK": 0,
+        "noK": 0,
+        "delta": 0
+      },
+      "stdDev": {
+        "withK": 3,
+        "noK": 3,
+        "delta": 0
+      },
+      "fit": {
+        "withK": 0.45,
+        "noK": 0.45,
+        "delta": 0
+      }
+    },
+    {
+      "scenarioId": "S20",
+      "tasks": 4,
+      "movedOwners": 2,
+      "coverage": {
+        "withK": 1,
+        "noK": 1,
+        "delta": 0
+      },
+      "stdDev": {
+        "withK": 7.4498,
+        "noK": 6.364,
+        "delta": 1.0858
+      },
+      "fit": {
+        "withK": 0.65,
+        "noK": 0.65,
+        "delta": 0
+      }
+    }
+  ]
+}

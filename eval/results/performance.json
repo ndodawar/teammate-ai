@@ -1,0 +1,47 @@
+{
+  "config": {
+    "iterations": 50,
+    "scenarios": 20
+  },
+  "note": "Durasi KOMPUTASI murni in-process (ms). Jaringan/DB/render diukur terpisah.",
+  "pipelineAll20Scenarios": {
+    "n": 50,
+    "min": 0.197,
+    "median": 0.285,
+    "p95": 0.465,
+    "max": 1.888,
+    "mean": 0.372
+  },
+  "pipelineOneScenario": {
+    "n": 50,
+    "min": 0.016,
+    "median": 0.017,
+    "p95": 0.025,
+    "max": 0.051,
+    "mean": 0.019
+  },
+  "whatIf": {
+    "n": 50,
+    "min": 0.005,
+    "median": 0.009,
+    "p95": 0.026,
+    "max": 0.231,
+    "mean": 0.016
+  },
+  "sliderRecompute": {
+    "n": 50,
+    "min": 0.003,
+    "median": 0.005,
+    "p95": 0.027,
+    "max": 0.184,
+    "mean": 0.011
+  },
+  "swap": {
+    "n": 50,
+    "min": 0,
+    "median": 0,
+    "p95": 0.01,
+    "max": 0.111,
+    "mean": 0.005
+  }
+}

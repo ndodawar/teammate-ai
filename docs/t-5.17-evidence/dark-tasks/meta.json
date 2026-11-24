@@ -1,0 +1,23 @@
+{
+  "url": "/p/571ed6652bece73b325c7b1e/tasks",
+  "width": 1440,
+  "height": 900,
+  "reduced": false,
+  "theme": "dark",
+  "stops": [
+    0
+  ],
+  "geom": {
+    "docHeight": 2207,
+    "innerHeight": 900,
+    "scrollWidth": 1440
+  },
+  "shots": [
+    {
+      "name": "darktasks-00-y0.png",
+      "requested": 0,
+      "actual": 0
+    }
+  ],
+  "errors": []
+}

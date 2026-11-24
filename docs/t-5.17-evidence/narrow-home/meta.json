@@ -1,0 +1,41 @@
+{
+  "url": "/",
+  "width": 320,
+  "height": 700,
+  "reduced": false,
+  "theme": "light",
+  "stops": [
+    0,
+    0.3,
+    0.6,
+    1
+  ],
+  "geom": {
+    "docHeight": 3943,
+    "innerHeight": 700,
+    "scrollWidth": 320
+  },
+  "shots": [
+    {
+      "name": "narrow-00-y0.png",
+      "requested": 0,
+      "actual": 0
+    },
+    {
+      "name": "narrow-01-y973.png",
+      "requested": 973,
+      "actual": 973
+    },
+    {
+      "name": "narrow-02-y1946.png",
+      "requested": 1946,
+      "actual": 1946
+    },
+    {
+      "name": "narrow-03-y3243.png",
+      "requested": 3243,
+      "actual": 3243
+    }
+  ],
+  "errors": []
+}

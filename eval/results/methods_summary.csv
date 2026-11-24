@@ -1,0 +1,5 @@
+method,runs,scenarios,coverage_mean,coverage_min,coverage_max,loadStdDev_mean,maxDev_mean,overR2_mean,r1_total,r2final_total,r3_total,fit_mean,manualChanges_total
+hybrid,20,20,0.8083,0.0000,1.0000,5.6160,6.8333,0.900,0,24,1,0.6454,1
+random,600,20,0.7539,0.0000,1.0000,5.2962,6.4994,0.965,31,752,147,0.5846,178
+round-robin,20,20,0.8083,0.0000,1.0000,3.8759,4.7667,0.850,2,18,4,0.6738,6
+manual,20,20,0.8667,0.0000,1.0000,5.6160,6.8333,0.900,2,24,0,0.6679,2

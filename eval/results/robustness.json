@@ -1,0 +1,65 @@
+{
+  "conditions": [
+    {
+      "id": 1,
+      "name": "Gemini aktif",
+      "status": "blocked",
+      "detail": "GEMINI_API_KEY tidak ada; tidak ada panggilan nyata."
+    },
+    {
+      "id": 2,
+      "name": "API key tidak tersedia",
+      "status": "pass",
+      "detail": "0 panggilan=true; template dipakai=true"
+    },
+    {
+      "id": 3,
+      "name": "Rate limit (mock)",
+      "status": "mock-pass",
+      "detail": "error tertangkap, slot terpakai (callCount=1). Mock, bukan API nyata."
+    },
+    {
+      "id": 4,
+      "name": "Timeout (mock)",
+      "status": "mock-pass",
+      "detail": "error tertangkap, slot terpakai (callCount=1). Mock."
+    },
+    {
+      "id": 5,
+      "name": "Respons tidak valid (mock)",
+      "status": "mock-pass",
+      "detail": "JSON.parse gagal → jalur fallback ke template. Mock."
+    },
+    {
+      "id": 6,
+      "name": "Input terlalu panjang",
+      "status": "pass",
+      "detail": "taskSchema menolak description 600 char: true"
+    },
+    {
+      "id": 7,
+      "name": "Prompt injection sebagai data",
+      "status": "pass",
+      "detail": "assignment tetap ke anggota sah=true; teks injeksi tidak mengubah pemilik. (Jalur AI live BLOCKED, tetapi engine deterministik imun karena deskripsi tak dipakai untuk seleksi.)"
+    },
+    {
+      "id": 8,
+      "name": "Cache hit (mock)",
+      "status": "mock-pass",
+      "detail": "nilai dari cache tanpa panggilan provider (providerCalls=0). Mock."
+    },
+    {
+      "id": 9,
+      "name": "Cache miss (mock)",
+      "status": "mock-pass",
+      "detail": "provider dipanggil sekali lalu disimpan (providerCalls=1). Mock."
+    },
+    {
+      "id": 10,
+      "name": "Kegagalan DB cache (mock)",
+      "status": "mock-pass",
+      "detail": "error cache DB tertangkap tanpa crash; slot terpakai. Mock."
+    }
+  ],
+  "note": "Kondisi 1 (Gemini aktif) BLOCKED tanpa key. Kondisi 3,4,5,8,9,10 = MOCK berlabel. Kondisi 2,6,7 diuji pada kode nyata (offline)."
+}

@@ -1,0 +1,30 @@
+[
+  {
+    "file": "before/desktop-light-p_{code}_members_{code}.png",
+    "route": "/p/c7c3b1c0b05291c3c931a7d1/members/{code}",
+    "theme": "light",
+    "vp": "desktop",
+    "height": 900
+  },
+  {
+    "file": "before/desktop-dark-p_{code}_members_{code}.png",
+    "route": "/p/c7c3b1c0b05291c3c931a7d1/members/{code}",
+    "theme": "dark",
+    "vp": "desktop",
+    "height": 900
+  },
+  {
+    "file": "before/mobile-light-p_{code}_members_{code}.png",
+    "route": "/p/c7c3b1c0b05291c3c931a7d1/members/{code}",
+    "theme": "light",
+    "vp": "mobile",
+    "height": 844
+  },
+  {
+    "file": "before/mobile-dark-p_{code}_members_{code}.png",
+    "route": "/p/c7c3b1c0b05291c3c931a7d1/members/{code}",
+    "theme": "dark",
+    "vp": "mobile",
+    "height": 844
+  }
+]

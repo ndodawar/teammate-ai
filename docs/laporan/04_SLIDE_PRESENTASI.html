@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pembagi Tugas Kelompok Berbasis Rekomendasi AI</title>
+<style>
+/* Token diambil dari DESIGN.md proyek (light mode), bukan palet baru. */
+:root{
+  --bg:#ffffff;
+  --surface:#f4f4f5;
+  --line:#e4e4e7;
+  --ink:#09090b;
+  --ink-2:#52525b;
+  --ink-3:#a1a1aa;
+  --accent:#2563eb;
+  --ok:#15803d;
+  --ok-bg:#f0fdf4;
+  --warn:#a16207;
+  --warn-bg:#fefce8;
+  --err:#b91c1c;
+  --err-bg:#fef2f2;
+  --font:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Inter,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%}
+body{
+  background:var(--surface);
+  color:var(--ink);
+  font-family:var(--font);
+  overflow:hidden;
+  -webkit-font-smoothing:antialiased;
+}
+.deck{height:100%;display:block}
+.slide{
+  display:none;
+  height:100vh;
+  padding:48px 64px 84px;
+  background:var(--bg);
+  flex-direction:column;
+  overflow-y:auto;
+}
+.slide.on{display:flex}
+.kicker{
+  font-family:var(--mono);font-size:11px;letter-spacing:.08em;
+  text-transform:uppercase;color:var(--ink-3);margin-bottom:14px;
+}
+h1{font-size:40px;line-height:1.15;letter-spacing:-.02em;font-weight:700;max-width:22ch}
+h2{font-size:26px;line-height:1.25;letter-spacing:-.01em;font-weight:650;margin-bottom:8px}
+h3{font-size:15px;font-weight:650;margin:18px 0 8px}
+p{font-size:15px;line-height:1.6;color:var(--ink-2);max-width:72ch}
+p strong{color:var(--ink);font-weight:650}
+.lede{font-size:17px;color:var(--ink-2);margin-top:14px;max-width:66ch}
+.rule{height:1px;background:var(--line);margin:22px 0}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:28px;margin-top:20px}
+.cols3{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:20px}
+.card{
+  border:1px solid var(--line);border-radius:6px;padding:16px 18px;background:var(--bg);
+}
+.card .n{font-family:var(--mono);font-size:11px;color:var(--ink-3);display:block;margin-bottom:6px}
+.card .t{font-size:14px;font-weight:650;margin-bottom:6px}
+.card .d{font-size:13px;color:var(--ink-2);line-height:1.5}
+table{width:100%;border-collapse:collapse;margin-top:16px;font-size:13.5px}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line)}
+th{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-3);font-weight:650;border-bottom:1px solid var(--ink-3)}
+td.num{font-family:var(--mono);font-variant-numeric:tabular-nums;text-align:right}
+td.num.best{font-weight:700;color:var(--ink)}
+tr.hl td{background:var(--surface)}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.badge{
+  display:inline-block;font-family:var(--mono);font-size:11px;padding:2px 8px;
+  border-radius:3px;font-weight:600;
+}
+.b-ok{background:var(--ok-bg);color:var(--ok)}
+.b-warn{background:var(--warn-bg);color:var(--warn)}
+.b-err{background:var(--err-bg);color:var(--err)}
+.bars{margin-top:18px;display:flex;flex-direction:column;gap:12px}
+.bar-row{display:grid;grid-template-columns:130px 1fr 66px;align-items:center;gap:12px;font-size:13px}
+.bar-track{height:22px;background:var(--surface);border-radius:3px;position:relative;overflow:hidden}
+.bar-fill{height:100%;background:var(--accent);border-radius:3px}
+.bar-fill.alt{background:var(--ink-3)}
+.bar-fill.ok{background:var(--ok)}
+.bar-fill.err{background:var(--err)}
+.bar-val{font-family:var(--mono);font-variant-numeric:tabular-nums;text-align:right}
+.flow{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:22px}
+.node{
+  border:1px solid var(--line);border-radius:5px;padding:10px 14px;font-size:12.5px;
+  background:var(--bg);line-height:1.35;
+}
+.node .k{font-family:var(--mono);font-size:10px;color:var(--ink-3);display:block}
+.node.acc{border-color:var(--accent);border-left:3px solid var(--accent)}
+.node.ai{border-style:dashed}
+.arrow{color:var(--ink-3);font-size:16px}
+.quote{
+  border-left:3px solid var(--line);padding:4px 0 4px 16px;margin-top:16px;
+  font-size:14px;color:var(--ink-2);
+}
+.note{font-size:12.5px;color:var(--ink-3);margin-top:14px;line-height:1.55;max-width:78ch}
+.note code{font-family:var(--mono);background:var(--surface);padding:1px 5px;border-radius:3px;font-size:12px}
+ul{margin:10px 0 0 18px}
+li{font-size:14px;line-height:1.65;color:var(--ink-2);margin-bottom:6px}
+li strong{color:var(--ink)}
+.title-slide{justify-content:center;background:var(--bg)}
+.title-slide .meta{
+  margin-top:30px;font-family:var(--mono);font-size:12px;color:var(--ink-3);line-height:2;
+}
+.title-slide .meta .fill{color:inherit}
+.nav{
+  position:fixed;bottom:0;left:0;right:0;height:52px;background:rgba(255,255,255,.94);
+  backdrop-filter:blur(6px);border-top:1px solid var(--line);display:flex;align-items:center;
+  justify-content:space-between;padding:0 24px;font-family:var(--mono);font-size:11.5px;color:var(--ink-3);
+  z-index:10;
+}
+.nav button{
+  border:1px solid var(--line);background:var(--bg);border-radius:4px;padding:6px 12px;
+  font-family:var(--mono);font-size:11.5px;color:var(--ink);cursor:pointer;
+}
+.nav button:hover{background:var(--surface)}
+.nav button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.progress{height:2px;background:var(--line);flex:1;margin:0 16px;border-radius:1px;overflow:hidden}
+.progress i{display:block;height:100%;background:var(--accent);width:0;transition:width .2s}
+.two-col-split{display:grid;grid-template-columns:1.15fr .85fr;gap:32px;margin-top:18px;align-items:start}
+.kpi{display:flex;gap:24px;margin-top:18px;flex-wrap:wrap}
+.kpi .item{min-width:120px}
+.kpi .v{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:26px;font-weight:650;letter-spacing:-.02em}
+.kpi .l{font-size:11.5px;color:var(--ink-3);margin-top:2px;line-height:1.4}
+@media (max-width:900px){
+  .slide{padding:28px 24px 76px}
+  h1{font-size:28px}
+  .cols,.cols3,.two-col-split{grid-template-columns:1fr}
+  .bar-row{grid-template-columns:96px 1fr 54px}
+}
+@media (prefers-reduced-motion:reduce){
+  .progress i{transition:none}
+}
+</style>
+</head>
+<body>
+<main class="deck" id="deck">
+
+  <!-- 1. JUDUL -->
+  <section class="slide title-slide on">
+    <div class="kicker">Tugas Akhir / Proyek Akhir &middot; Fase 5</div>
+    <h1>Pembagi Tugas Kelompok Berbasis Rekomendasi AI</h1>
+    <p class="lede">Sistem yang mengusulkan pembagian tugas kelompok dengan skor yang bisa diperiksa,
+      aturan yang bisa diaudit, dan hasil evaluasi yang dilaporkan apa adanya.</p>
+    <div class="meta">
+      Penyusun: <span class="fill">Anthony Fernando Martono</span> &middot; NIM <span class="fill">25421892</span><br>
+      Anggota: <span class="fill">Rickel Engsali Putra</span> &middot; 25421946<br>
+      <span class="fill">Krisostomus Rendry</span> &middot; 25421932 &middot; <span class="fill">Deluis Reto Bapage</span> &middot; 25421903<br>
+      Dosen Pengampu: <span class="fill">Fredrikus Suarezsaga, S.T., M.T.</span><br>
+      <span class="fill">Teknik Informatika &middot; Universitas Widya Dharma Pontianak</span>
+    </div>
+  </section>
+
+  <!-- 2. LATAR BELAKANG -->
+  <section class="slide">
+    <div class="kicker">Latar Belakang</div>
+    <h2>Pembagian tugas kelompok jarang dihitung</h2>
+    <p class="lede">Yang lazim: kesepakatan cepat, keputusan ketua, atau siapa yang lebih dulu mengangkat tangan.
+      Cepat, tetapi tidak bisa dipertanggungjawabkan ketika anggota bertanya "mengapa saya?".</p>
+    <div class="cols3">
+      <div class="card">
+        <span class="n">Masalah 1</span>
+        <div class="t">Beban tidak seimbang</div>
+        <div class="d">Anggota yang dianggap paling mampu menerima terlalu banyak pekerjaan.</div>
+      </div>
+      <div class="card">
+        <span class="n">Masalah 2</span>
+        <div class="t">Keterampilan tidak cocok</div>
+        <div class="d">Tugas pemrograman jatuh ke anggota yang belum punya keterampilan itu.</div>
+      </div>
+      <div class="card">
+        <span class="n">Masalah 3</span>
+        <div class="t">Tidak transparan</div>
+        <div class="d">Tidak ada dasar perhitungan yang bisa ditunjuk saat ditanya.</div>
+      </div>
+    </div>
+    <div class="rule"></div>
+    <p><strong>Masalah keempat:</strong> ketika penanggung jawab harus diganti, ketua harus menghitung ulang
+      dampaknya ke semua orang. Itu hampir tidak mungkin dilakukan manual secara konsisten.</p>
+    <p class="note">Motivasi proyek ini, bukan angka. Laporan tidak memuat statistik mahasiswa atau data kampus,
+      karena tidak ada survei yang dikumpulkan untuk proyek ini.</p>
+  </section>
+
+  <!-- 3. RUMUSAN MASALAH & TUJUAN -->
+  <section class="slide">
+    <div class="kicker">Rumusan Masalah &amp; Tujuan</div>
+    <h2>Lima pertanyaan yang harus dijawab data</h2>
+    <div class="two-col-split">
+      <div>
+        <h3>Rumusan masalah</h3>
+        <ul>
+          <li>Bagaimana membuat pembagian tugas dengan dasar yang bisa diperiksa?</li>
+          <li>Seberapa baik hybrid dibanding acak, round-robin, dan manual?</li>
+          <li>Apakah komponen kemiripan konten benar-benar memperbaiki hasil?</li>
+          <li>Apakah penjelasan sistem sesuai dengan angkanya?</li>
+          <li>Apakah integrasi Gemini berjalan, dan sejauh mana ketergantungannya?</li>
+        </ul>
+      </div>
+      <div>
+        <h3>Yang diukur, bukan diklaim</h3>
+        <ul>
+          <li>Pelanggaran aturan keras R1-R5</li>
+          <li>Cakupan keterampilan</li>
+          <li>Keseragaman beban</li>
+          <li>Kejujuran klaim penjelasan</li>
+          <li>Waktu komputasi dan waktu respons</li>
+        </ul>
+      </div>
+    </div>
+    <p class="note">Keputusan penugasan ditentukan mesin skor dan aturan. Model bahasa tidak memilih siapa mengerjakan apa.</p>
+  </section>
+
+  <!-- 4. KONSEP SIMPLE RECOMMENDATION -->
+  <section class="slide">
+    <div class="kicker">Konsep</div>
+    <h2>Simple Recommendation: empat komponen, satu keputusan</h2>
+    <p>Setiap komponen dinormalisasi ke rentang 0 sampai 1, lalu digabung dengan bobot.</p>
+    <table>
+      <thead><tr><th>Komponen</th><th>Arti</th><th class="num">Bobot</th><th class="num">Bobot cadangan</th></tr></thead>
+      <tbody>
+        <tr><td><strong>K</strong></td><td>Kemiripan teks tugas dan profil (embedding, cosine)</td><td class="num">0,40</td><td class="num">0,00</td></tr>
+        <tr><td><strong>S</strong></td><td>Kesesuaian skill wajib dengan level anggota</td><td class="num">0,30</td><td class="num">0,50</td></tr>
+        <tr><td><strong>C</strong></td><td>Sisa kapasitas setelah menerima tugas</td><td class="num">0,20</td><td class="num">0,33</td></tr>
+        <tr><td><strong>M</strong></td><td>Minat anggota pada skill yang diminta</td><td class="num">0,10</td><td class="num">0,17</td></tr>
+      </tbody>
+    </table>
+    <div class="rule"></div>
+    <p><strong>total = 0,40K + 0,30S + 0,20C + 0,10M</strong></p>
+    <p class="note">Bobot ini keputusan desain awal, bukan hasil optimasi. Laporan tidak mengklaim bobot ini optimal.</p>
+  </section>
+
+  <!-- 5. ARSITEKTUR -->
+  <section class="slide">
+    <div class="kicker">Arsitektur</div>
+    <h2>Alur satu arah: usulan dihitung, keputusan disimpan terpisah</h2>
+    <div class="flow">
+      <div class="node"><span class="k">Klien</span>Browser</div>
+      <span class="arrow">&rarr;</span>
+      <div class="node acc"><span class="k">Next.js 16</span>API Route</div>
+      <span class="arrow">&rarr;</span>
+      <div class="node"><span class="k">lib/scoring</span>pipeline + assign</div>
+      <span class="arrow">&rarr;</span>
+      <div class="node ai"><span class="k">Gemini</span>embedding</div>
+    </div>
+    <div class="flow">
+      <div class="node"><span class="k">lib/scoring</span>rules R1-R5</div>
+      <span class="arrow">&rarr;</span>
+      <div class="node"><span class="k">lib/ai</span>penjelasan</div>
+      <span class="arrow">&rarr;</span>
+      <div class="node acc"><span class="k">Respons</span>skor + alasan</div>
+      <span class="arrow">&rarr;</span>
+      <div class="node"><span class="k">Supabase</span>Postgres + pgvector</div>
+    </div>
+    <div class="rule"></div>
+    <div class="cols">
+      <div>
+        <h3>Kenapa dipisah</h3>
+        <p style="font-size:13.5px">Permintaan rekomendasi tidak pernah mengubah data penugasan. Pengguna bisa mencoba
+          berbagai bobot tanpa merusak pembagian yang sudah disepakati.</p>
+      </div>
+      <div>
+        <h3>Kenapa AI tidak memilih</h3>
+        <p style="font-size:13.5px">Skor tetap bisa direproduksi meski model berubah atau gagal. Penjelasan boleh
+          berbeda kata; angka tidak boleh berbeda.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 6. EMBEDDING & COSINE -->
+  <section class="slide">
+    <div class="kicker">Cara Kerja</div>
+    <h2>Embedding dan cosine similarity</h2>
+    <div class="two-col-split">
+      <div>
+        <h3>Langkah</h3>
+        <p style="font-size:13.5px;margin-top:6px">1. Teks tugas dan profil anggota diubah menjadi vektor
+          <span class="mono">768</span> dimensi.</p>
+        <p style="font-size:13.5px;margin-top:8px">2. Kedekatan makna diukur sebagai kosinus sudut:</p>
+        <p class="mono" style="font-size:14px;margin-top:8px;background:var(--surface);padding:10px 12px;border-radius:4px">cos(a,b) = (a &middot; b) / (||a|| &times; ||b||)</p>
+        <p style="font-size:13.5px;margin-top:8px">3. Nilai mentah dipetakan ke 0-1 dengan batas 0,2 dan 0,8.</p>
+      </div>
+      <div>
+        <h3>Kenapa dipetakan</h3>
+        <p style="font-size:13.5px">Cosine antara dua teks alami jarang mendekati 0 atau 1. Tanpa pemetaan,
+          komponen K hanya memakai sebagian kecil rentangnya, sehingga bobotnya secara efektif lebih kecil
+          daripada angka yang tertulis.</p>
+        <h3>Kenapa 768</h3>
+        <p style="font-size:13.5px">Kolom database bertipe <span class="mono">vector(768)</span>. Vektor dengan
+          panjang berbeda tidak bisa disimpan maupun dibandingkan.</p>
+      </div>
+    </div>
+    <p class="note">Dasar teori: model ruang vektor (Salton dkk., 1975), embedding (Mikolov dkk., 2013; Reimers &amp; Gurevych, 2019).</p>
+  </section>
+
+  <!-- 7. WEIGHTED SCORING & R1-R5 -->
+  <section class="slide">
+    <div class="kicker">Aturan</div>
+    <h2>Lima aturan yang tidak boleh dilanggar skor</h2>
+    <table>
+      <thead><tr><th>Aturan</th><th>Definisi yang berlaku</th></tr></thead>
+      <tbody>
+        <tr><td><strong>R1</strong></td><td>Anggota dengan kapasitas 0 bukan kandidat</td></tr>
+        <tr><td><strong>R2</strong></td><td>Beban &le; 1,25 &times; ideal <em>dan</em> &le; kapasitas</td></tr>
+        <tr><td><strong>R3</strong></td><td>Kandidat wajib level &ge; 3 pada salah satu skill wajib</td></tr>
+        <tr><td><strong>R4</strong></td><td>Tepat satu penanggung jawab per tugas</td></tr>
+        <tr><td><strong>R5</strong></td><td>Tugas terkunci mempertahankan pemiliknya</td></tr>
+      </tbody>
+    </table>
+    <div class="rule"></div>
+    <div class="cols">
+      <div>
+        <h3>15 kasus diuji, semua sesuai definisi</h3>
+        <p style="font-size:13.5px">Dijalankan pada mesin asli, bukan tiruan.</p>
+      </div>
+      <div>
+        <h3>Dua perilaku belum diatur PRD</h3>
+        <p style="font-size:13.5px">Bila semua berkapasitas 0, atau bila tidak ada kandidat R2, sistem tetap
+          menugaskan. Keputusan produk ini masih terbuka.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 8. IMPLEMENTASI WEBSITE -->
+  <section class="slide">
+    <div class="kicker">Implementasi</div>
+    <h2>Yang benar-benar bisa dilakukan pengguna</h2>
+    <div class="cols3">
+      <div class="card"><span class="n">01</span><div class="t">Buat proyek &amp; anggota</div><div class="d">Kode proyek acak, profil skill, minat, kapasitas per anggota.</div></div>
+      <div class="card"><span class="n">02</span><div class="t">Muat 11 tugas template</div><div class="d">Atau buat manual. Analisis AI bisa dikoreksi sebelum diterapkan.</div></div>
+      <div class="card"><span class="n">03</span><div class="t">Hitung rekomendasi</div><div class="d">Matriks K/S/C/M per kandidat, dengan status utama, kandidat, atau gugur.</div></div>
+      <div class="card"><span class="n">04</span><div class="t">Geser bobot</div><div class="d">Hasil berubah seketika di browser, tanpa memanggil server.</div></div>
+      <div class="card"><span class="n">05</span><div class="t">What-if, kunci, undo</div><div class="d">Pratinjau perubahan sebelum diterapkan; satu langkah undo.</div></div>
+      <div class="card"><span class="n">06</span><div class="t">Ekspor</div><div class="d">CSV dan teks, tanpa memanggil Gemini.</div></div>
+    </div>
+    <p class="note">286 pengujian unit lulus pada 21 berkas. <span class="mono">tsc --noEmit</span> bersih, <span class="mono">eslint</span> tanpa error.</p>
+  </section>
+
+  <!-- 9. DATASET & METODE -->
+  <section class="slide">
+    <div class="kicker">Metode Evaluasi</div>
+    <h2>Dataset sintetis, empat pembanding, metrik yang bisa diaudit</h2>
+    <div class="cols">
+      <div>
+        <h3>D1: 26 tugas</h3>
+        <p style="font-size:13.5px">11 template aplikasi ditambah 15 variasi non-IT, tersebar di 11 domain.
+          Tujuannya memastikan sistem tidak hanya untuk tugas pemrograman.</p>
+        <h3 style="margin-top:16px">D2: 20 skenario</h3>
+        <p style="font-size:13.5px">49 anggota, 35 tugas, menutup 15 kondisi sulit: kapasitas nol, skill tidak
+          cocok, tidak ada kandidat R2, tugas terkunci.</p>
+        <h3 style="margin-top:16px">D3: tidak ada</h3>
+        <p style="font-size:13.5px">Tidak ada data kelompok nyata maupun persetujuan. Karena itu tidak ada klaim
+          yang berlaku untuk pengguna sungguhan.</p>
+      </div>
+      <div>
+        <h3>Empat metode</h3>
+        <ul>
+          <li><strong>Hybrid</strong>: mesin asli</li>
+          <li><strong>Random</strong>: 30 seed, total 600 run</li>
+          <li><strong>Round-robin</strong>: buta skill</li>
+          <li><strong>Manual</strong>: pembagian buatan manusia</li>
+        </ul>
+        <h3 style="margin-top:16px">Metrik</h3>
+        <ul>
+          <li>Skill coverage</li>
+          <li>Load stddev</li>
+          <li>Pelanggaran R1, R2, R3</li>
+          <li>Fit</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- 10. HASIL PERBANDINGAN -->
+  <section class="slide">
+    <div class="kicker">Hasil</div>
+    <h2>Tidak ada pemenang tunggal</h2>
+    <table>
+      <thead><tr><th>Metrik</th><th class="num">Hybrid</th><th class="num">Random</th><th class="num">Round-robin</th><th class="num">Manual</th></tr></thead>
+      <tbody>
+        <tr><td>Skill coverage</td><td class="num">0,808</td><td class="num">0,754</td><td class="num">0,808</td><td class="num best">0,867</td></tr>
+        <tr><td>Load stddev (jam)</td><td class="num">5,62</td><td class="num">5,30</td><td class="num best">3,88</td><td class="num">5,62</td></tr>
+        <tr><td>Pelanggaran R1</td><td class="num best">0</td><td class="num">31</td><td class="num">2</td><td class="num">2</td></tr>
+        <tr><td>Pelanggaran R3</td><td class="num">1</td><td class="num">147</td><td class="num">4</td><td class="num best">0</td></tr>
+        <tr><td>Pelanggaran R2 final</td><td class="num">24</td><td class="num">752</td><td class="num best">18</td><td class="num">24</td></tr>
+        <tr><td>Fit</td><td class="num">0,645</td><td class="num">0,585</td><td class="num best">0,674</td><td class="num">0,668</td></tr>
+      </tbody>
+    </table>
+    <div class="bars">
+      <div class="bar-row"><span>R1 Hybrid</span><div class="bar-track"><div class="bar-fill ok" style="width:0.2%"></div></div><span class="bar-val">0</span></div>
+      <div class="bar-row"><span>R1 Random</span><div class="bar-track"><div class="bar-fill err" style="width:100%"></div></div><span class="bar-val">31</span></div>
+    </div>
+    <p class="note">Angka dari <span class="mono">eval/results/methods_summary.json</span>. Hybrid satu-satunya dengan nol
+      pelanggaran R1, tetapi seri dengan round-robin pada coverage dan masih melanggar R2 sebanyak 24 kali.</p>
+  </section>
+
+  <!-- 11. KETERBATASAN -->
+  <section class="slide">
+    <div class="kicker">Keterbatasan</div>
+    <h2>Apa yang belum terbukti</h2>
+    <div class="cols">
+      <div>
+        <h3>Ablasi K</h3>
+        <p style="font-size:13.5px"><strong>25,7%</strong> keputusan berpindah pemilik karena K.
+          Tetapi <strong>&Delta; coverage = 0</strong> dan &Delta; fit sedikit negatif. Ablasi ini memakai
+          <em>proxy deterministik</em>, bukan embedding live, jadi belum membuktikan apakah embedding
+          semantik memperbaiki kualitas.</p>
+        <h3 style="margin-top:16px">Kejujuran penjelasan</h3>
+        <p style="font-size:13.5px">Jalur template: <strong>33/33 klaim benar</strong>. Jalur model:
+          dari 26 klaim, <strong>8 tidak didukung</strong> dan <strong>2 bertentangan</strong>, terutama
+          frasa "sisa kapasitas memadai" saat kapasitas nol.</p>
+      </div>
+      <div>
+        <h3>Gemini</h3>
+        <p style="font-size:13.5px">Embedding <strong>768 dimensi berhasil</strong>, rekomendasi live
+          <span class="mono">isFallback: false</span>. Tetapi pemakaian Gemini untuk teks penjelasan pada
+          satu run <strong>belum terverifikasi</strong> karena kuota harian habis (HTTP 429).</p>
+        <h3 style="margin-top:16px">Performa</h3>
+        <p style="font-size:13.5px">Komputasi P95 <strong>di bawah 1 ms</strong>, slider 2,5 ms, tanpa request
+          jaringan. Namun <span class="mono">/api/recommend</span> <strong>2,14-3,48 s</strong> karena
+          latensi database. Target di bawah 1 detik belum terpenuhi end-to-end.</p>
+      </div>
+    </div>
+    <div class="rule"></div>
+    <p><span class="badge b-warn">BELUM TERBUKTI</span> &nbsp;Human agreement, data D3, dan ablasi live
+      belum ada. Tidak ada klaim kualitas yang bersandar pada penilaian manusia.</p>
+  </section>
+
+  <!-- 12. KESIMPULAN -->
+  <section class="slide">
+    <div class="kicker">Kesimpulan</div>
+    <h2>Yang berhasil, dan yang harus diperbaiki</h2>
+    <div class="two-col-split">
+      <div>
+        <h3>Berhasil</h3>
+        <ul>
+          <li><strong>Transparansi</strong>: setiap keputusan punya empat komponen yang bisa ditunjuk.</li>
+          <li><strong>Kepatuhan R1</strong>: nol pelanggaran, tidak dicapai metode lain.</li>
+          <li><strong>What-if dan slider</strong>: hitungan milidetik, nol request jaringan.</li>
+          <li><strong>Sistem tahan gagal</strong>: tanpa Gemini, mode cadangan tetap penuh.</li>
+        </ul>
+      </div>
+      <div>
+        <h3>Perlu diperbaiki</h3>
+        <ul>
+          <li><strong>24 pelanggaran R2</strong> belum terselesaikan.</li>
+          <li><strong>Penjelasan model</strong> masih bertentangan dengan angka.</li>
+          <li><strong>Respons</strong> 2-3,5 detik, didominasi database.</li>
+          <li><strong>Evaluasi manusia</strong> belum dilakukan.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="rule"></div>
+    <div class="kpi">
+      <div class="item"><div class="v">0,808</div><div class="l">Skill coverage hybrid<br>(seri round-robin)</div></div>
+      <div class="item"><div class="v">0</div><div class="l">Pelanggaran R1<br>(terendah dari empat metode)</div></div>
+      <div class="item"><div class="v">24</div><div class="l">Pelanggaran R2<br>(belum nol)</div></div>
+      <div class="item"><div class="v">&lt;1 ms</div><div class="l">P95 komputasi<br>(20 skenario)</div></div>
+    </div>
+    <p class="note">Sistem ini memindahkan sebagian masalah ke tempat yang bisa diperiksa. Ia belum menyelesaikan
+      pemerataan beban, dan laporan ini tidak mengklaim sebaliknya.</p>
+  </section>
+
+</main>
+
+<nav class="nav" aria-label="Navigasi slide">
+  <button id="prev" type="button">&larr; Sebelumnya</button>
+  <div class="progress" role="progressbar" aria-valuemin="1" aria-valuenow="1" aria-label="Progres slide"><i id="pbar"></i></div>
+  <span id="counter">1 / 12</span>
+  <button id="next" type="button">Berikutnya &rarr;</button>
+</nav>
+
+<script>
+(function(){
+  var slides = Array.prototype.slice.call(document.querySelectorAll('.slide'));
+  var i = 0;
+  var pbar = document.getElementById('pbar');
+  var counter = document.getElementById('counter');
+  var prog = document.querySelector('.progress');
+
+  function show(n){
+    i = Math.max(0, Math.min(slides.length - 1, n));
+    slides.forEach(function(s, k){ s.classList.toggle('on', k === i); });
+    pbar.style.width = ((i + 1) / slides.length * 100) + '%';
+    counter.textContent = (i + 1) + ' / ' + slides.length;
+    prog.setAttribute('aria-valuenow', String(i + 1));
+    slides[i].scrollTop = 0;
+  }
+
+  document.getElementById('next').addEventListener('click', function(){ show(i + 1); });
+  document.getElementById('prev').addEventListener('click', function(){ show(i - 1); });
+
+  document.addEventListener('keydown', function(e){
+    if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ') { e.preventDefault(); show(i + 1); }
+    else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); show(i - 1); }
+    else if (e.key === 'Home') { show(0); }
+    else if (e.key === 'End') { show(slides.length - 1); }
+  });
+
+  show(0);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,53 @@
+{
+  "url": "/",
+  "width": 390,
+  "height": 844,
+  "reduced": false,
+  "theme": "light",
+  "stops": [
+    0,
+    0.2,
+    0.4,
+    0.6,
+    0.8,
+    1
+  ],
+  "geom": {
+    "docHeight": 3640,
+    "innerHeight": 844,
+    "scrollWidth": 390
+  },
+  "shots": [
+    {
+      "name": "mhome-00-y0.png",
+      "requested": 0,
+      "actual": 0
+    },
+    {
+      "name": "mhome-01-y559.png",
+      "requested": 559,
+      "actual": 559
+    },
+    {
+      "name": "mhome-02-y1118.png",
+      "requested": 1118,
+      "actual": 1118
+    },
+    {
+      "name": "mhome-03-y1678.png",
+      "requested": 1678,
+      "actual": 1678
+    },
+    {
+      "name": "mhome-04-y2237.png",
+      "requested": 2237,
+      "actual": 2237
+    },
+    {
+      "name": "mhome-05-y2796.png",
+      "requested": 2796,
+      "actual": 2796
+    }
+  ],
+  "errors": []
+}

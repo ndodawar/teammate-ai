@@ -1,0 +1,74 @@
+{
+  "d1": {
+    "total": 26,
+    "templates": 11,
+    "nonIt": 15,
+    "domains": [
+      "proyek AI",
+      "makalah akademik",
+      "penelitian sederhana",
+      "presentasi kelompok",
+      "analisis bisnis",
+      "studi kasus pemasaran",
+      "dokumentasi kegiatan",
+      "perencanaan acara",
+      "laporan observasi",
+      "desain publikasi",
+      "pengumpulan dan analisis data"
+    ],
+    "descriptionLengths": {
+      "pendek": 7,
+      "sedang": 12,
+      "panjang": 7
+    },
+    "effortBuckets": {
+      "rendah": 6,
+      "sedang": 15,
+      "tinggi": 5
+    },
+    "skillCount": {
+      "none": 0,
+      "single": 4,
+      "multi": 22
+    },
+    "distinctSkills": [
+      "data dan machine learning",
+      "desain antarmuka",
+      "desain sistem",
+      "koordinasi",
+      "pemrograman backend",
+      "pemrograman frontend",
+      "pengujian",
+      "penulisan akademik",
+      "presentasi",
+      "riset literatur"
+    ]
+  },
+  "d2": {
+    "total": 20,
+    "coveredConditions": [
+      "beban awal tak seimbang",
+      "jam tersedia nol",
+      "kapasitas rendah",
+      "kapasitas tinggi",
+      "minat berbeda",
+      "satu anggota sangat tinggi",
+      "semua di bawah level 3",
+      "skill merata",
+      "skill tidak cocok",
+      "skill wajib beragam",
+      "skill+minat tinggi, kapasitas rendah",
+      "tidak ada kandidat R2",
+      "tugas bersaing",
+      "tugas terkunci",
+      "tugas usaha tinggi"
+    ],
+    "totalMembers": 49,
+    "totalTasks": 35
+  },
+  "errors": {
+    "d1": [],
+    "d2": []
+  },
+  "ok": true
+}

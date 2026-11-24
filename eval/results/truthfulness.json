@@ -1,0 +1,455 @@
+{
+  "summary": {
+    "generateExplanation": {
+      "texts": 6,
+      "overallVerdicts": [
+        "tidak_didukung",
+        "bertentangan",
+        "bertentangan",
+        "tidak_didukung",
+        "tidak_didukung",
+        "tidak_didukung"
+      ],
+      "claimCounts": {
+        "benar": 16,
+        "tidak_didukung": 8,
+        "bertentangan": 2,
+        "tidak_cukup_info": 0
+      }
+    },
+    "memberReason": {
+      "texts": 6,
+      "overallVerdicts": [
+        "benar",
+        "benar",
+        "benar",
+        "benar",
+        "benar",
+        "benar"
+      ],
+      "claimCounts": {
+        "benar": 33,
+        "tidak_didukung": 0,
+        "bertentangan": 0,
+        "tidak_cukup_info": 0
+      }
+    }
+  },
+  "audits": [
+    {
+      "source": "generateExplanation",
+      "text": "Ani memiliki keterampilan relevan (penulisan akademik) dengan skor kesesuaian 87% dan sisa kapasitas yang memadai.",
+      "fallback": true,
+      "scorePercentInText": 87,
+      "actualScorePercent": 87,
+      "claims": [
+        {
+          "claim": "menyebut nama \"Ani\"",
+          "verdict": "benar",
+          "evidence": "teks memuat nama=true"
+        },
+        {
+          "claim": "daftar skill relevan sama dengan skill wajib level>=3",
+          "verdict": "benar",
+          "evidence": "teks=[penulisan akademik] data=[penulisan akademik]"
+        },
+        {
+          "claim": "\"sisa kapasitas yang memadai\"",
+          "verdict": "tidak_didukung",
+          "evidence": "C=0.90 (klaim klaim tetap muncul tanpa mengecek besaran)"
+        },
+        {
+          "claim": "\"skor kesesuaian 87%\"",
+          "verdict": "benar",
+          "evidence": "teks=87%, aktual=87%"
+        }
+      ],
+      "overall": "tidak_didukung"
+    },
+    {
+      "source": "memberReason",
+      "text": "Ani menguasai penulisan akademik, menyisakan 90% kapasitas dan berminat tinggi pada pekerjaan ini; komponen konten (K) tidak dihitung pada mode cadangan. Skor 87%.",
+      "fallback": true,
+      "scorePercentInText": 87,
+      "actualScorePercent": 87,
+      "claims": [
+        {
+          "claim": "menyebut nama \"Ani\"",
+          "verdict": "benar",
+          "evidence": "nama anggota"
+        },
+        {
+          "claim": "skill yang \"dikuasai\" = skill wajib level>=3",
+          "verdict": "benar",
+          "evidence": "matched=[penulisan akademik]"
+        },
+        {
+          "claim": "pernyataan kapasitas konsisten dengan C",
+          "verdict": "benar",
+          "evidence": "C*100=90; teks=90"
+        },
+        {
+          "claim": "pernyataan minat \"berminat tinggi\" sesuai M=1.00",
+          "verdict": "benar",
+          "evidence": "M=1.00"
+        },
+        {
+          "claim": "\"Skor 87%\"",
+          "verdict": "benar",
+          "evidence": "teks=87%, aktual=87%"
+        },
+        {
+          "claim": "menyatakan K tidak dihitung pada mode cadangan",
+          "verdict": "benar",
+          "evidence": "fallback=true"
+        }
+      ],
+      "overall": "benar"
+    },
+    {
+      "source": "generateExplanation",
+      "text": "Budi memiliki keterampilan relevan (data dan machine learning) dengan skor kesesuaian 0% dan sisa kapasitas yang memadai.",
+      "fallback": true,
+      "scorePercentInText": 0,
+      "actualScorePercent": 0,
+      "claims": [
+        {
+          "claim": "menyebut nama \"Budi\"",
+          "verdict": "benar",
+          "evidence": "teks memuat nama=true"
+        },
+        {
+          "claim": "daftar skill relevan sama dengan skill wajib level>=3",
+          "verdict": "benar",
+          "evidence": "teks=[data dan machine learning] data=[data dan machine learning]"
+        },
+        {
+          "claim": "\"sisa kapasitas yang memadai\"",
+          "verdict": "bertentangan",
+          "evidence": "C=0.00 (kapasitas 0 → klaim bertentangan)"
+        },
+        {
+          "claim": "\"skor kesesuaian 0%\"",
+          "verdict": "benar",
+          "evidence": "teks=0%, aktual=0%"
+        },
+        {
+          "claim": "menyajikan skor 0% sebagai kalimat rekomendasi tanpa peringatan",
+          "verdict": "tidak_didukung",
+          "evidence": "total=0 (gagal R1/R2) tetapi kalimat tetap berbentuk afirmatif"
+        }
+      ],
+      "overall": "bertentangan"
+    },
+    {
+      "source": "memberReason",
+      "text": "Budi menguasai data dan machine learning, tidak menyisakan kapasitas untuk tugas sebesar ini dengan minat sedang; komponen konten (K) tidak dihitung pada mode cadangan. Skor 0%.",
+      "fallback": true,
+      "scorePercentInText": 0,
+      "actualScorePercent": 0,
+      "claims": [
+        {
+          "claim": "menyebut nama \"Budi\"",
+          "verdict": "benar",
+          "evidence": "nama anggota"
+        },
+        {
+          "claim": "skill yang \"dikuasai\" = skill wajib level>=3",
+          "verdict": "benar",
+          "evidence": "matched=[data dan machine learning]"
+        },
+        {
+          "claim": "pernyataan kapasitas konsisten dengan C",
+          "verdict": "benar",
+          "evidence": "C=0; teks menyebut kapasitas habis=true"
+        },
+        {
+          "claim": "pernyataan minat \"minat sedang\" sesuai M=0.50",
+          "verdict": "benar",
+          "evidence": "M=0.50"
+        },
+        {
+          "claim": "\"Skor 0%\"",
+          "verdict": "benar",
+          "evidence": "teks=0%, aktual=0%"
+        },
+        {
+          "claim": "menyatakan K tidak dihitung pada mode cadangan",
+          "verdict": "benar",
+          "evidence": "fallback=true"
+        }
+      ],
+      "overall": "benar"
+    },
+    {
+      "source": "generateExplanation",
+      "text": "Citra memiliki keterampilan relevan (koordinasi) dengan skor kesesuaian 0% dan sisa kapasitas yang memadai.",
+      "fallback": true,
+      "scorePercentInText": 0,
+      "actualScorePercent": 0,
+      "claims": [
+        {
+          "claim": "menyebut nama \"Citra\"",
+          "verdict": "benar",
+          "evidence": "teks memuat nama=true"
+        },
+        {
+          "claim": "daftar skill relevan sama dengan skill wajib level>=3",
+          "verdict": "benar",
+          "evidence": "teks=[koordinasi] data=[koordinasi]"
+        },
+        {
+          "claim": "\"sisa kapasitas yang memadai\"",
+          "verdict": "bertentangan",
+          "evidence": "C=0.00 (kapasitas 0 → klaim bertentangan)"
+        },
+        {
+          "claim": "\"skor kesesuaian 0%\"",
+          "verdict": "benar",
+          "evidence": "teks=0%, aktual=0%"
+        },
+        {
+          "claim": "menyajikan skor 0% sebagai kalimat rekomendasi tanpa peringatan",
+          "verdict": "tidak_didukung",
+          "evidence": "total=0 (gagal R1/R2) tetapi kalimat tetap berbentuk afirmatif"
+        }
+      ],
+      "overall": "bertentangan"
+    },
+    {
+      "source": "memberReason",
+      "text": "Citra menguasai koordinasi, tidak memiliki jam tersedia sehingga gugur pada R1 dengan minat sedang; komponen konten (K) tidak dihitung pada mode cadangan. Skor 0%.",
+      "fallback": true,
+      "scorePercentInText": 0,
+      "actualScorePercent": 0,
+      "claims": [
+        {
+          "claim": "menyebut nama \"Citra\"",
+          "verdict": "benar",
+          "evidence": "nama anggota"
+        },
+        {
+          "claim": "skill yang \"dikuasai\" = skill wajib level>=3",
+          "verdict": "benar",
+          "evidence": "matched=[koordinasi]"
+        },
+        {
+          "claim": "pernyataan kapasitas konsisten dengan C",
+          "verdict": "benar",
+          "evidence": "capacity=0; teks menyebut R1=true"
+        },
+        {
+          "claim": "pernyataan minat \"minat sedang\" sesuai M=0.50",
+          "verdict": "benar",
+          "evidence": "M=0.50"
+        },
+        {
+          "claim": "\"Skor 0%\"",
+          "verdict": "benar",
+          "evidence": "teks=0%, aktual=0%"
+        },
+        {
+          "claim": "menyatakan K tidak dihitung pada mode cadangan",
+          "verdict": "benar",
+          "evidence": "fallback=true"
+        }
+      ],
+      "overall": "benar"
+    },
+    {
+      "source": "generateExplanation",
+      "text": "Dodi memenuhi persyaratan dasar dengan skor kesesuaian 57% dan sisa kapasitas yang memadai.",
+      "fallback": true,
+      "scorePercentInText": 57,
+      "actualScorePercent": 57,
+      "claims": [
+        {
+          "claim": "menyebut nama \"Dodi\"",
+          "verdict": "benar",
+          "evidence": "teks memuat nama=true"
+        },
+        {
+          "claim": "\"memenuhi persyaratan dasar\" saat tidak ada skill wajib level>=3",
+          "verdict": "tidak_didukung",
+          "evidence": "skill>=3=0; klaim generik tanpa dasar spesifik"
+        },
+        {
+          "claim": "\"sisa kapasitas yang memadai\"",
+          "verdict": "tidak_didukung",
+          "evidence": "C=0.88 (klaim klaim tetap muncul tanpa mengecek besaran)"
+        },
+        {
+          "claim": "\"skor kesesuaian 57%\"",
+          "verdict": "benar",
+          "evidence": "teks=57%, aktual=57%"
+        }
+      ],
+      "overall": "tidak_didukung"
+    },
+    {
+      "source": "memberReason",
+      "text": "Dodi belum menilai pemrograman backend di level 3 atau lebih, menyisakan 88% kapasitas dengan minat sedang; komponen konten (K) tidak dihitung pada mode cadangan. Skor 57%.",
+      "fallback": true,
+      "scorePercentInText": 57,
+      "actualScorePercent": 57,
+      "claims": [
+        {
+          "claim": "menyebut nama \"Dodi\"",
+          "verdict": "benar",
+          "evidence": "nama anggota"
+        },
+        {
+          "claim": "pernyataan kapasitas konsisten dengan C",
+          "verdict": "benar",
+          "evidence": "C*100=88; teks=88"
+        },
+        {
+          "claim": "pernyataan minat \"minat sedang\" sesuai M=0.50",
+          "verdict": "benar",
+          "evidence": "M=0.50"
+        },
+        {
+          "claim": "\"Skor 57%\"",
+          "verdict": "benar",
+          "evidence": "teks=57%, aktual=57%"
+        },
+        {
+          "claim": "menyatakan K tidak dihitung pada mode cadangan",
+          "verdict": "benar",
+          "evidence": "fallback=true"
+        }
+      ],
+      "overall": "benar"
+    },
+    {
+      "source": "generateExplanation",
+      "text": "Eka memiliki keterampilan relevan (presentasi) dengan skor kesesuaian 62% dan sisa kapasitas yang memadai.",
+      "fallback": false,
+      "scorePercentInText": 62,
+      "actualScorePercent": 62,
+      "claims": [
+        {
+          "claim": "menyebut nama \"Eka\"",
+          "verdict": "benar",
+          "evidence": "teks memuat nama=true"
+        },
+        {
+          "claim": "daftar skill relevan sama dengan skill wajib level>=3",
+          "verdict": "benar",
+          "evidence": "teks=[presentasi] data=[presentasi]"
+        },
+        {
+          "claim": "\"sisa kapasitas yang memadai\"",
+          "verdict": "tidak_didukung",
+          "evidence": "C=0.90 (klaim klaim tetap muncul tanpa mengecek besaran)"
+        },
+        {
+          "claim": "\"skor kesesuaian 62%\"",
+          "verdict": "benar",
+          "evidence": "teks=62%, aktual=62%"
+        }
+      ],
+      "overall": "tidak_didukung"
+    },
+    {
+      "source": "memberReason",
+      "text": "Eka menguasai presentasi, menyisakan 90% kapasitas dengan minat rendah. Skor 62%.",
+      "fallback": false,
+      "scorePercentInText": 62,
+      "actualScorePercent": 62,
+      "claims": [
+        {
+          "claim": "menyebut nama \"Eka\"",
+          "verdict": "benar",
+          "evidence": "nama anggota"
+        },
+        {
+          "claim": "skill yang \"dikuasai\" = skill wajib level>=3",
+          "verdict": "benar",
+          "evidence": "matched=[presentasi]"
+        },
+        {
+          "claim": "pernyataan kapasitas konsisten dengan C",
+          "verdict": "benar",
+          "evidence": "C*100=90; teks=90"
+        },
+        {
+          "claim": "pernyataan minat \"minat rendah\" sesuai M=0.00",
+          "verdict": "benar",
+          "evidence": "M=0.00"
+        },
+        {
+          "claim": "\"Skor 62%\"",
+          "verdict": "benar",
+          "evidence": "teks=62%, aktual=62%"
+        }
+      ],
+      "overall": "benar"
+    },
+    {
+      "source": "generateExplanation",
+      "text": "Fani memenuhi persyaratan dasar dengan skor kesesuaian 98% dan sisa kapasitas yang memadai.",
+      "fallback": true,
+      "scorePercentInText": 98,
+      "actualScorePercent": 98,
+      "claims": [
+        {
+          "claim": "menyebut nama \"Fani\"",
+          "verdict": "benar",
+          "evidence": "teks memuat nama=true"
+        },
+        {
+          "claim": "\"memenuhi persyaratan dasar\" saat tidak ada skill wajib level>=3",
+          "verdict": "tidak_didukung",
+          "evidence": "skill>=3=0; klaim generik tanpa dasar spesifik"
+        },
+        {
+          "claim": "\"sisa kapasitas yang memadai\"",
+          "verdict": "tidak_didukung",
+          "evidence": "C=0.95 (klaim klaim tetap muncul tanpa mengecek besaran)"
+        },
+        {
+          "claim": "\"skor kesesuaian 98%\"",
+          "verdict": "benar",
+          "evidence": "teks=98%, aktual=98%"
+        }
+      ],
+      "overall": "tidak_didukung"
+    },
+    {
+      "source": "memberReason",
+      "text": "Fani tidak membutuhkan skill khusus, menyisakan 95% kapasitas dan berminat tinggi pada pekerjaan ini; komponen konten (K) tidak dihitung pada mode cadangan. Skor 98%.",
+      "fallback": true,
+      "scorePercentInText": 98,
+      "actualScorePercent": 98,
+      "claims": [
+        {
+          "claim": "menyebut nama \"Fani\"",
+          "verdict": "benar",
+          "evidence": "nama anggota"
+        },
+        {
+          "claim": "pernyataan kapasitas konsisten dengan C",
+          "verdict": "benar",
+          "evidence": "C*100=95; teks=95"
+        },
+        {
+          "claim": "pernyataan minat \"berminat tinggi\" sesuai M=1.00",
+          "verdict": "benar",
+          "evidence": "M=1.00"
+        },
+        {
+          "claim": "\"Skor 98%\"",
+          "verdict": "benar",
+          "evidence": "teks=98%, aktual=98%"
+        },
+        {
+          "claim": "menyatakan K tidak dihitung pada mode cadangan",
+          "verdict": "benar",
+          "evidence": "fallback=true"
+        }
+      ],
+      "overall": "benar"
+    }
+  ]
+}

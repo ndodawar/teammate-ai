@@ -28,6 +28,23 @@ export function checkR3(task: Task, members: Member[]): Member[] {
   return members; // Fallback to all members with a warning
 }
 
+/**
+ * T-6.09: true when the task actually has an R3-qualified member.
+ *
+ * `checkR3` returns the WHOLE roster when nobody qualifies, because PRD 8.2 R3
+ * still asks for a best-effort recommendation. That fallback pool must never be
+ * read as "everyone satisfies R3": the T-6.09 report was exactly that — a member
+ * with no required skill at level >= 3 shown as a normal candidate. Callers use
+ * this predicate to tell a satisfied R3 apart from the fallback, so eligibility
+ * and the user-facing warning stay honest.
+ */
+export function hasQualifiedMember(task: Task, members: Member[]): boolean {
+  if (task.required_skills.length === 0) return true;
+  return members.some(member =>
+    task.required_skills.some(skill => (member.skills[skill] ?? 0) >= 3)
+  );
+}
+
 export function checkR4(assignmentsCount: number): boolean {
   return assignmentsCount === 1;
 }

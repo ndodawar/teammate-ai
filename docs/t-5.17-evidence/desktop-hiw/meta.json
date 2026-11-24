@@ -1,0 +1,71 @@
+{
+  "url": "/how-it-works",
+  "width": 1440,
+  "height": 900,
+  "reduced": false,
+  "theme": "light",
+  "stops": [
+    0,
+    0.12,
+    0.24,
+    0.36,
+    0.48,
+    0.6,
+    0.72,
+    0.84,
+    1
+  ],
+  "geom": {
+    "docHeight": 10113,
+    "innerHeight": 900,
+    "scrollWidth": 1440
+  },
+  "shots": [
+    {
+      "name": "hiw-00-y0.png",
+      "requested": 0,
+      "actual": 0
+    },
+    {
+      "name": "hiw-01-y1106.png",
+      "requested": 1106,
+      "actual": 1106
+    },
+    {
+      "name": "hiw-02-y2211.png",
+      "requested": 2211,
+      "actual": 2211
+    },
+    {
+      "name": "hiw-03-y3317.png",
+      "requested": 3317,
+      "actual": 3317
+    },
+    {
+      "name": "hiw-04-y4422.png",
+      "requested": 4422,
+      "actual": 4422
+    },
+    {
+      "name": "hiw-05-y5528.png",
+      "requested": 5528,
+      "actual": 5528
+    },
+    {
+      "name": "hiw-06-y6633.png",
+      "requested": 6633,
+      "actual": 6633
+    },
+    {
+      "name": "hiw-07-y7739.png",
+      "requested": 7739,
+      "actual": 7739
+    },
+    {
+      "name": "hiw-08-y9213.png",
+      "requested": 9213,
+      "actual": 9213
+    }
+  ],
+  "errors": []
+}

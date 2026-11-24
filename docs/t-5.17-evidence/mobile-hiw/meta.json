@@ -1,0 +1,53 @@
+{
+  "url": "/how-it-works",
+  "width": 390,
+  "height": 844,
+  "reduced": false,
+  "theme": "light",
+  "stops": [
+    0,
+    0.2,
+    0.4,
+    0.6,
+    0.8,
+    1
+  ],
+  "geom": {
+    "docHeight": 7044,
+    "innerHeight": 844,
+    "scrollWidth": 390
+  },
+  "shots": [
+    {
+      "name": "mhiw-00-y0.png",
+      "requested": 0,
+      "actual": 0
+    },
+    {
+      "name": "mhiw-01-y1240.png",
+      "requested": 1240,
+      "actual": 1240
+    },
+    {
+      "name": "mhiw-02-y2480.png",
+      "requested": 2480,
+      "actual": 2480
+    },
+    {
+      "name": "mhiw-03-y3720.png",
+      "requested": 3720,
+      "actual": 3720
+    },
+    {
+      "name": "mhiw-04-y4960.png",
+      "requested": 4960,
+      "actual": 4960
+    },
+    {
+      "name": "mhiw-05-y6200.png",
+      "requested": 6200,
+      "actual": 6200
+    }
+  ],
+  "errors": []
+}

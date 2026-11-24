@@ -1,0 +1,41 @@
+{
+  "url": "/",
+  "width": 1440,
+  "height": 900,
+  "reduced": true,
+  "theme": "light",
+  "stops": [
+    0,
+    0.35,
+    0.7,
+    1
+  ],
+  "geom": {
+    "docHeight": 2804,
+    "innerHeight": 900,
+    "scrollWidth": 1440
+  },
+  "shots": [
+    {
+      "name": "rehome-00-y0.png",
+      "requested": 0,
+      "actual": 0
+    },
+    {
+      "name": "rehome-01-y666.png",
+      "requested": 666,
+      "actual": 666
+    },
+    {
+      "name": "rehome-02-y1333.png",
+      "requested": 1333,
+      "actual": 1333
+    },
+    {
+      "name": "rehome-03-y1904.png",
+      "requested": 1904,
+      "actual": 1904
+    }
+  ],
+  "errors": []
+}

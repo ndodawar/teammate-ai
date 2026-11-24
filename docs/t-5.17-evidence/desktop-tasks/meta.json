@@ -1,0 +1,41 @@
+{
+  "url": "/p/571ed6652bece73b325c7b1e/tasks",
+  "width": 1440,
+  "height": 900,
+  "reduced": false,
+  "theme": "light",
+  "stops": [
+    0,
+    0.35,
+    0.7,
+    1
+  ],
+  "geom": {
+    "docHeight": 2207,
+    "innerHeight": 900,
+    "scrollWidth": 1440
+  },
+  "shots": [
+    {
+      "name": "tasks-00-y0.png",
+      "requested": 0,
+      "actual": 0
+    },
+    {
+      "name": "tasks-01-y457.png",
+      "requested": 457,
+      "actual": 457
+    },
+    {
+      "name": "tasks-02-y915.png",
+      "requested": 915,
+      "actual": 915
+    },
+    {
+      "name": "tasks-03-y1307.png",
+      "requested": 1307,
+      "actual": 1307
+    }
+  ],
+  "errors": []
+}

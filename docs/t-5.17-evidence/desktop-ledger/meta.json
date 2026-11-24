@@ -1,0 +1,41 @@
+{
+  "url": "/",
+  "width": 1440,
+  "height": 900,
+  "reduced": false,
+  "theme": "light",
+  "stops": [
+    0.62,
+    0.66,
+    0.7,
+    0.74
+  ],
+  "geom": {
+    "docHeight": 6895,
+    "innerHeight": 900,
+    "scrollWidth": 1440
+  },
+  "shots": [
+    {
+      "name": "led-00-y3717.png",
+      "requested": 3717,
+      "actual": 3717
+    },
+    {
+      "name": "led-01-y3957.png",
+      "requested": 3957,
+      "actual": 3957
+    },
+    {
+      "name": "led-02-y4197.png",
+      "requested": 4197,
+      "actual": 4197
+    },
+    {
+      "name": "led-03-y4436.png",
+      "requested": 4436,
+      "actual": 4436
+    }
+  ],
+  "errors": []
+}

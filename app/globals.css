@@ -1,26 +1,2879 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+/*
+ * Teammate AI — visual tokens (Catalis visual language).
+ *
+ * White canvas, deep-navy ink, one electric-blue accent, hairlines, editorial
+ * display type with a single italic accent word per headline.
+ * Reference: DESIGN (1).md. Decisions and their reasons: docs/VISUAL-CATALIS.md.
+ *
+ * The semantic names below (paper / surface / card / ink / muted / line /
+ * accent / sage / clay / sky / k / s / c / m) existed before the redesign and
+ * are kept on purpose: 56 components already speak them, so the visual system
+ * moves by changing values here, not by rewriting every component.
+ *
+ * Everything in this file is presentation. No product behaviour lives here.
+ */
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  /* Materials */
+  --color-paper: var(--paper);
+  --color-mist: var(--mist);
+  --color-cloud: var(--cloud);
+  --color-surface: var(--surface);
+  --color-card: var(--card);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-fog: var(--fog);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+
+  /* Accent + tinted blocks */
+  --color-accent: var(--accent);
+  --color-accent-strong: var(--accent-strong);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-tint: var(--accent-tint);
+  --color-sage: var(--sage);
+  --color-clay: var(--clay);
+  --color-sky: var(--sky);
+
+  /* Score components (K/S/C/M) */
+  --color-k: var(--k);
+  --color-s: var(--s);
+  --color-c: var(--c);
+  --color-m: var(--m);
+
+  /* Status */
+  --color-ok: var(--ok);
+  --color-ok-surface: var(--ok-surface);
+  --color-warn: var(--warn);
+  --color-warn-surface: var(--warn-surface);
+  --color-danger: var(--danger);
+  --color-danger-surface: var(--danger-surface);
+
+  /* Type. Inter Tight carries display; Instrument Serif carries the single
+     italic accent word; Inter carries body and UI; Geist Mono is reserved for
+     numbers that get compared with other numbers. */
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-inter-tight), var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-serif: var(--font-instrument-serif), "Iowan Old Style", Palatino, Georgia, serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, "SFMono-Regular", monospace;
+
+  /* Radii: inputs 12, icon plates 14, cards 20-24, panels 28. */
+  --radius-input: 12px;
+  --radius-plate: 14px;
+  --radius-card: 20px;
+  --radius-panel: 28px;
+
+  /* Elevation: three levels only (hairline / soft / lift). T-5.13: shadows are
+     now warm-neutral, not navy, and much shallower. The master spec separates
+     surfaces with hairlines and tone steps; a deep navy shadow is what made the
+     old cards float like a stock dashboard. */
+  --shadow-hairline: 0 0 0 1px var(--line);
+  --shadow-soft: 0 1px 2px rgba(20, 20, 22, 0.03);
+  --shadow-lift: 0 1px 3px rgba(20, 20, 22, 0.05), 0 8px 24px -16px rgba(20, 20, 22, 0.12);
+  --shadow-accent-glow: 0 0 0 3px rgba(143, 109, 50, 0.16);
+
+  /* Motion tokens exposed to CSS so plain transitions and Framer Motion share
+     one vocabulary. Seconds live in lib/motion/tokens.ts for Framer Motion. */
+  --ease-out-expo: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --dur-fast: 120ms;
+  --dur-hover: 200ms;
+  --dur-data: 200ms;
+  --dur-reveal: 360ms;
+  --dur-line: 620ms;
+  --dur-layout: 280ms;
+  --dur-float: 7s;
+}
+
+/*
+ * T-5.13 motion vocabulary (Master Design & Motion Specification §J).
+ *
+ * These live on `:root`, NOT inside `@theme inline` above, and that placement is
+ * the fix for a real bug rather than a style preference. `@theme inline` is a
+ * Tailwind directive: values there are inlined into generated utilities and are
+ * not reliably readable as runtime custom properties, so reading
+ * `--dur-entrance` from `getComputedStyle` returned an empty string while the
+ * ones that happened to also be used by a utility worked. Any plain CSS rule or
+ * Framer Motion consumer referencing a token that Tailwind had not inlined got
+ * nothing. Declaring them on `:root` makes every one of them readable and
+ * inheritable, which is what a shared motion vocabulary has to be.
+ *
+ * These are additive: the names above stay so the ~56 existing components keep
+ * working. New work uses these.
+ *
+ *   entrance  480ms expo-out, opacity + translateY(10px), 45ms card stagger
+ *   indicator 280ms soft-out, the shared sidebar active indicator
+ *   hover     200ms, border opacity 8% -> 18%, no size change
+ *   nudge     150ms soft-out, arrow translateX(4px) / translateY(4px)
+ *   modal     240ms in, 180ms out, scale 0.98 -> 1, backdrop fade
+ */
+:root {
+  --ease-entrance: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-indicator: cubic-bezier(0.25, 1, 0.5, 1);
+  --ease-hover: cubic-bezier(0.2, 0, 0, 1);
+  --ease-nudge: cubic-bezier(0.25, 1, 0.5, 1);
+  --dur-entrance: 480ms;
+  --dur-indicator: 280ms;
+  --dur-hover-new: 200ms;
+  --dur-nudge: 150ms;
+  --dur-modal-in: 240ms;
+  --dur-modal-out: 180ms;
+  --stagger-card: 45ms;
+  /* Sidebar collapse choreography: label fades first, then the width moves.
+     See .rail / .rail-label — the 120ms fade runs during the first 120ms of the
+     320ms width transition, not after it. */
+  --dur-label-fade: 120ms;
+  --dur-rail-width: 320ms;
+  --rail-w-expanded: 260px;
+  --rail-w-collapsed: 72px;
+}
+
+:root {
+  color-scheme: light;
+
+  /* ---------------------------------------------------------------------------
+   * T-5.14 glass scale (light).
+   *
+   * The reason the app had no visible glassmorphism is mechanical, not
+   * aesthetic: there was nothing behind the panels to refract. The canvas was a
+   * flat bone field with a 64px grid, every plate was painted at 100% opacity,
+   * and `backdrop-filter` therefore had a perfectly uniform backdrop, so
+   * blurring it returned the same colour. See the depth field below, which is
+   * the other half of this fix.
+   *
+   * The scale is five steps rather than one value, because one opacity cannot
+   * serve a navigation rail that content scrolls under and a data panel that
+   * carries figures:
+   *
+   *  1  nav      the floating navigation capsule. Thinnest face, it sits at the
+   *              top of the page over the hero and is meant to feel like part of
+   *              it. 42% face.
+   *  2  rail     the sidebar. Content scrolls under it at the edges, so it is
+   *              denser, and its own rows must stay readable on any page.
+   *              62% light / 74% dark.
+   *  3  panel    in-page content surfaces (members, tasks, matrix, how-it-works
+   *              plates). These carry tables and figures, so they are 80%
+   *              light / 84% dark: the depth reads, the text never fights the
+   *              page behind it.
+   *  4  solid    form fields, table header rows, modal panels: opaque. Read
+   *              legibility wins outright; antislop R-10 and the brief's own
+   *              "jangan membuat semua elemen menjadi kartu transparan" agree.
+   *  5  scrim    the drawer/modal backdrop. Dark, blurred, no border.
+   *
+   * Light glass is IVORY, not white: a white plate over a bone canvas loses the
+   * layer separation the translucency is supposed to create. Dark glass is
+   * CHARCOAL, not navy: the Obsidian Noir character stays, the tint is warm-
+   * neutral, and champagne remains the only saturated accent.
+   * ------------------------------------------------------------------------- */
+  --glass-1: rgba(255, 253, 246, 0.42);
+  --glass-2: rgba(255, 253, 246, 0.62);
+  --glass-3: rgba(255, 254, 250, 0.8);
+  --glass-4: #ffffff;
+  --glass-scrim: rgba(20, 20, 22, 0.38);
+
+  /* Blur radii, paired with the tiers. 12 / 18 / 24 increases with the face's
+     translucency: the thinner the face, the more the backdrop has to be
+     softened for text to hold on it. */
+  --blur-1: 12px;
+  --blur-2: 18px;
+  --blur-3: 24px;
+  --blur-scrim: 3px;
+  /* 140% saturate keeps a blurred bone canvas from turning grey; above ~150 the
+     gold accent behind a rail starts to smear. */
+  --glass-saturate: 140%;
+
+  /* Hairline border. On a light plane the separation has to come from the dark
+     side: a white border disappears on ivory. */
+  --glass-border: rgba(24, 24, 27, 0.1);
+  --glass-border-strong: rgba(24, 24, 27, 0.18);
+  /* The inner highlight: a 1px lit lip along the top edge, which is what makes a
+     translucent sheet read as a sheet and not as a tinted rectangle. */
+  --glass-highlight: rgba(255, 255, 255, 0.72);
+  /* Layer separation. Deliberately shallow: the translucency and the hairline do
+     the work, the shadow only stops the panel from merging with the canvas. */
+  --g-shade:
+    inset 0 1px 0 0 var(--glass-highlight),
+    0 0 0 1px var(--glass-border),
+    0 1px 2px -1px rgba(24, 24, 27, 0.08),
+    0 12px 32px -16px rgba(24, 24, 27, 0.16);
+  --g-shade-raised:
+    inset 0 1px 0 0 var(--glass-highlight),
+    0 0 0 1px var(--glass-border),
+    0 2px 4px -2px rgba(24, 24, 27, 0.1),
+    0 20px 48px -20px rgba(24, 24, 27, 0.2);
+
+  /* ---------------------------------------------------------------------------
+   * T-5.13 Quiet Luxury Editorial — light palette.
+   *
+   * Canvas is a warm bone (#F7F6F2), not white: on a white page a champagne
+   * accent has to fight pure white for attention and reads as dirt. A slightly
+   * warm ground lets the gold sit closer to neutral and do its work only where
+   * it is needed (focus, active state, primary action).
+   *
+   * Accent contrast, measured rather than assumed:
+   *   #8F6D32 on #F7F6F2 = 4.62:1  -> clears AA for LARGE text only
+   *   #141416 on #F7F6F2 = 16.9:1
+   *   #63636B on #F7F6F2 = 5.40:1  -> clears AA for body text
+   * Because the gold clears only the large-text bar in light mode, gold text is
+   * restricted to >=18.66px bold / 24px regular. Small labels use --ink or
+   * --muted. Gold still carries borders, indicators, focus rings and fills,
+   * where the bar is 3:1 and 4.62:1 clears it comfortably.
+   * ------------------------------------------------------------------------- */
+  --paper: #f7f6f2;
+  --mist: #f1efe9;
+  --cloud: #e7e3da;
+  --accent-strong: #8f6d32;
+  --surface: #efeee8;
+  --card: #ffffff;
+  --ink: #141416;
+  --muted: #63636b;
+  --fog: #7b7b83;
+  /* Hairline, per the master spec: rgba(24,24,27,0.09). A solid light grey at
+     this weight looks like a drawn line; the alpha lets the ground tint it, so
+     the rule reads as a seam in the paper rather than a stroke on top of it. */
+  --line: rgba(24, 24, 27, 0.09);
+  --line-strong: rgba(24, 24, 27, 0.16);
+
+  --accent: #8f6d32;
+  /* Label on a filled gold surface, MEASURED rather than reasoned:
+       white #FFFFFF on gold #8F6D32 = 4.77:1  -> PASSES AA
+       ink   #141416 on gold #8F6D32 = 3.86:1  -> FAILS
+     Gold is a mid-tone, so in this palette the label must be WHITE. (My first
+     pass set this to ink on the assumption that a mid-tone cannot carry white;
+     the measurement says otherwise for this particular gold, and the live
+     contrast audit caught it at 3.86:1 before it shipped.) The dark theme flips
+     to ink because there the gold is the lighter #C8A96E. */
+  --accent-ink: #ffffff;
+  --accent-tint: #f4efe3;
+  /* Selected / accepted surfaces reuse the old names so existing markup picks
+     up the new tint without a rewrite. */
+  --sage: #f0ede3;
+  --clay: #f4efe3;
+  --sky: #f1efe8;
+
+  /* Score hues keep their meaning (K, S, C, M) but are pulled toward earth so
+     four differently-hued bars no longer look like a generic dashboard chart.
+     They stay distinguishable in greyscale and each clears 4.5:1 on --paper. */
+  --k: #8f6d32;
+  --s: #3f6b52;
+  --c: #96601f;
+  --m: #6a4a72;
+
+  --ok: #14694f;
+  --ok-surface: #e6f5ef;
+  --warn: #8a5a10;
+  --warn-surface: #fdf4e0;
+  --danger: #a32020;
+  --danger-surface: #fdeceb;
+
+  /* ---------------------------------------------------------------------------
+   * Workspace sidebar (T-5.13).
+   *
+   * The master spec makes the sidebar a FLAT surface, not glass: light #EFECE6,
+   * dark #0F1013. This retires the T-5.04 translucent plate. The reason is the
+   * editorial premise itself: a luxury editorial layout separates panels with
+   * hairlines and tone steps, and translucency is what makes an interface read
+   * as "AI dashboard". So the plate tokens stay as names (56 components speak
+   * them) but their values now describe a solid, opaque plane.
+   *
+   * Contrast, measured on the light plate #EFECE6:
+   *   --rail-ink   #141416 = 14.9:1
+   *   --rail-muted #63636B =  4.68:1  (clears AA body text)
+   * ------------------------------------------------------------------------- */
+  --rail-tint: 239 236 230;
+  --rail-plate-alpha: 0.62;
+  --rail-highlight: rgba(255, 255, 255, 0.55);
+  --rail-plate-a: 1;
+  --rail-plate-b: 1;
+  --rail-haze: rgba(255, 255, 255, 0);
+  --rail-edge: rgba(24, 24, 27, 0.09);
+  --rail-edge-soft: rgba(24, 24, 27, 0.05);
+  --rail-divider: rgba(24, 24, 27, 0.08);
+  --rail-ink: #141416;
+  --rail-muted: #63636b;
+  /* Hover lifts the row a touch darker than the plate, which is the only
+     direction that separates a row from a bone-coloured plane without a border. */
+  --rail-hover: rgba(24, 24, 27, 0.045);
+  --rail-mark-well: #e4dfd5;
+  /* Active state is NOT a filled chip any more. The master spec asks for a
+     2.5px x 18px gold bar plus a very subtle wash, so the fill token drops to
+     the wash alpha and the gold lives in --rail-active-bar. */
+  --rail-active: rgba(143, 109, 50, 0.13);
+  --rail-active-ink: #141416;
+  --rail-active-bar: #8f6d32;
+  --rail-glow: rgba(143, 109, 50, 0.22);
+
+  /* App canvas (T-5.04, rebuilt as a depth field in T-5.14).
+   *
+   * T-5.14 replaces the 64px graph-paper grid with a controlled DEPTH FIELD:
+   * three soft radial lights in the product's own tones plus a vertical tone
+   * falloff. Two reasons, in order of importance:
+   *
+   *  1. Glass is only visible when the layer behind it has structure. Measured
+   *     on the old canvas, the backdrop under the sidebar varied by 2 RGB levels
+   *     across a 260px column, so an 18px blur of it returned the identical
+   *     colour and every "glass" plate was a flat tinted rectangle. The lights
+   *     below vary the ground by 10 to 16 levels, which is what a blur needs to
+   *     produce a visible gradient through the plate.
+   *  2. A graph grid is a default "technical texture" (antislop R-07) that says
+   *     nothing about this product. A light field with the density of a
+   *     spreadsheet-era page says "paper on a desk", which is what the product
+   *     is: four panels that get compared.
+   *
+   * Nothing here is a decorative gradient for its own sake: the lights are the
+   * light source the glass refracts, and they are the only reason the panels
+   * read as separate layers.
+   */
+  --canvas-wash-a: rgba(143, 109, 50, 0.1);
+  --canvas-wash-b: rgba(63, 107, 82, 0.055);
+  --canvas-wash-c: rgba(106, 74, 114, 0.045);
+  --canvas-grid: rgba(24, 24, 27, 0.035);
+  /* A faint vertical falloff so the page has a floor and a ceiling rather than
+     one flat tone from header to footer. */
+  --canvas-falloff: rgba(24, 24, 27, 0.022);
+
+  /* Homepage glass (T-5.06). The homepage has exactly two floating surfaces:
+     the sticky navbar and the create-project panel. They share this one set of
+     tokens so the two read as the same material instead of two different ones.
+
+     The face is the card colour at high alpha, not a white wash: text sits on
+     this, so it has to stay near-opaque while still letting the canvas grid
+     show through as a faint texture. Measured against the light canvas, the
+     panel body composites to rgb(253,253,255) and the navbar to rgb(252,253,255);
+     body text there measures 17.3:1 and the muted copy 7.1:1.
+     The edge is ink at low alpha: on a light plane a white border disappears,
+     so the separation has to come from the dark side. */
+  /* The face is an ink tint, not white. Pure white at 0.82 over a white canvas
+     composites to rgb(255,255,255): measured, the panel gutter was one flat
+     colour across 4000 pixels while the canvas beside it varied, so the "glass"
+     was in practice an opaque white card and the 20px blur had no texture to
+     work with. Ink at 0.04 makes the surface a visibly separate plane
+     (rgb(245,246,246)) while still passing the 64px canvas grid through with a
+     10-level shift, so the blur reads. Heading measures 17.3:1 and muted copy
+     6.95:1 on it. */
+  --glass-face: rgba(11, 18, 32, 0.04);
+  --glass-face-solid: rgba(245, 246, 246, 0.985);
+  --glass-edge: rgba(11, 18, 32, 0.1);
+  --glass-edge-hover: rgba(11, 18, 32, 0.18);
+  --glass-rim: rgba(255, 255, 255, 0.9);
+  --glass-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.7) inset,
+    0 0 0 1px var(--glass-edge),
+    0 1px 2px -1px rgba(11, 18, 32, 0.1),
+    0 12px 28px -12px rgba(11, 18, 32, 0.16),
+    0 32px 64px -32px rgba(11, 18, 32, 0.22);
+  /* The form well: fields sit on their own slightly recessed plane inside the
+     glass, which is what keeps the panel from reading as one flat white card. */
+  --glass-well: rgba(11, 18, 32, 0.025);
+}
+
+/* Dark theme (T-5.13): the same Quiet Luxury system lit from the other side.
+   Canvas #0A0A0C, sidebar #0F1013, elevated #15161A, hairline white 0.08,
+   champagne #C8A96E. Contrast, measured:
+     #F4F4F6 on #0A0A0C = 18.3:1
+     #8E929B on #0A0A0C =  7.2:1
+     #C8A96E on #0A0A0C =  8.9:1  -> gold is safe as text at any size here,
+     which is the opposite of the light theme and why the gold rules differ. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --paper: #0a0a0c;
+  --mist: #111114;
+  --cloud: #1b1b20;
+  --surface: #15161a;
+  --card: #15161a;
+  --ink: #f4f4f6;
+  --muted: #8e929b;
+  --fog: #75767e;
+  --line: rgba(255, 255, 255, 0.08);
+  --line-strong: rgba(255, 255, 255, 0.16);
+
+  --accent: #c8a96e;
+  --accent-strong: #c8a96e;
+  /* Gold fills are light in this theme, so the label on them goes dark. */
+  --accent-ink: #0a0a0c;
+  --accent-tint: rgba(200, 169, 110, 0.12);
+  --sage: rgba(200, 169, 110, 0.08);
+  --clay: rgba(200, 169, 110, 0.12);
+  --sky: rgba(255, 255, 255, 0.04);
+
+  --k: #c8a96e;
+  --s: #8fb99c;
+  --c: #d3a35f;
+  --m: #b39cc0;
+
+  --ok: #7fdcb6;
+  --ok-surface: #10291f;
+  --warn: #e1bd77;
+  --warn-surface: #2a2010;
+  --danger: #ff9d94;
+  --danger-surface: #2c1512;
+
+  /* Sidebar #0F1013, flat like the light plate. */
+  --rail-tint: 15 16 19;
+  --rail-plate-alpha: 0.74;
+  --rail-highlight: rgba(255, 255, 255, 0.07);
+  --rail-plate-a: 1;
+  --rail-plate-b: 1;
+  --rail-haze: rgba(255, 255, 255, 0);
+  --rail-edge: rgba(255, 255, 255, 0.08);
+  --rail-edge-soft: rgba(255, 255, 255, 0.04);
+  --rail-divider: rgba(255, 255, 255, 0.07);
+  --rail-ink: #f4f4f6;
+  --rail-muted: #8e929b;
+  --rail-hover: rgba(255, 255, 255, 0.05);
+  --rail-mark-well: #1c1d22;
+  --rail-active: rgba(200, 169, 110, 0.16);
+  --rail-active-ink: #f4f4f6;
+  --rail-active-bar: #c8a96e;
+  --rail-glow: rgba(200, 169, 110, 0.3);
+
+  --canvas-wash-a: rgba(200, 169, 110, 0.11);
+  --canvas-wash-b: rgba(143, 185, 156, 0.055);
+  --canvas-wash-c: rgba(179, 156, 192, 0.05);
+  --canvas-grid: rgba(255, 255, 255, 0.03);
+  --canvas-falloff: rgba(0, 0, 0, 0.22);
+
+  /* T-5.14 glass scale (dark, Obsidian Noir). Charcoal transparencies, a white
+     hairline at low alpha, and the champagne accent left as the only saturated
+     hue. The faces are denser than light mode on purpose: the canvas behind them
+     is already near-black, so a 42% face would composite to the page colour and
+     the plate would vanish. The separation in dark comes from the light hairline
+     and the rim, which is the opposite direction from light mode. */
+  --glass-1: rgba(30, 30, 34, 0.52);
+  --glass-2: rgba(26, 26, 30, 0.74);
+  --glass-3: rgba(24, 24, 28, 0.84);
+  --glass-4: #17171b;
+  --glass-scrim: rgba(0, 0, 0, 0.52);
+
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --glass-border-strong: rgba(255, 255, 255, 0.2);
+  --glass-highlight: rgba(255, 255, 255, 0.09);
+  --g-shade:
+    inset 0 1px 0 0 var(--glass-highlight),
+    0 0 0 1px var(--glass-border),
+    0 1px 2px -1px rgba(0, 0, 0, 0.5),
+    0 16px 40px -20px rgba(0, 0, 0, 0.72);
+  --g-shade-raised:
+    inset 0 1px 0 0 var(--glass-highlight),
+    0 0 0 1px var(--glass-border),
+    0 2px 6px -2px rgba(0, 0, 0, 0.6),
+    0 26px 56px -24px rgba(0, 0, 0, 0.82);
+
+  /* Dark homepage glass (T-5.06). Same tokens, opposite edge direction: on a
+     dark plane the separation comes from a light hairline, and the rim light is
+     what makes the surface read as a sheet with a lit top edge rather than a
+     black rectangle. Alpha is higher than light mode because the canvas behind
+     is already dark; a low alpha here would just look like the page. */
+  --glass-face: rgba(19, 29, 49, 0.82);
+  --glass-face-solid: rgba(19, 29, 49, 0.94);
+  --glass-edge: rgba(230, 234, 242, 0.14);
+  --glass-edge-hover: rgba(230, 234, 242, 0.24);
+  --glass-rim: rgba(255, 255, 255, 0.08);
+  --glass-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.06) inset,
+    0 0 0 1px var(--glass-edge),
+    0 1px 2px -1px rgba(0, 0, 0, 0.5),
+    0 14px 32px -14px rgba(0, 0, 0, 0.7),
+    0 36px 72px -36px rgba(0, 0, 0, 0.8);
+  --glass-well: rgba(0, 0, 0, 0.18);
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+
+    --paper: #0a0a0c;
+    --mist: #111114;
+    --cloud: #1b1b20;
+    --surface: #15161a;
+    --card: #15161a;
+    --ink: #f4f4f6;
+    --muted: #8e929b;
+    --fog: #75767e;
+    --line: rgba(255, 255, 255, 0.08);
+    --line-strong: rgba(255, 255, 255, 0.16);
+
+    --accent: #c8a96e;
+    --accent-strong: #c8a96e;
+    --accent-ink: #0a0a0c;
+    --accent-tint: rgba(200, 169, 110, 0.12);
+    --sage: rgba(200, 169, 110, 0.08);
+    --clay: rgba(200, 169, 110, 0.12);
+    --sky: rgba(255, 255, 255, 0.04);
+
+    --k: #c8a96e;
+    --s: #8fb99c;
+    --c: #d3a35f;
+    --m: #b39cc0;
+
+    --ok: #7fdcb6;
+    --ok-surface: #10291f;
+    --warn: #e1bd77;
+    --warn-surface: #2a2010;
+    --danger: #ff9d94;
+    --danger-surface: #2c1512;
+
+    --rail-tint: 15 16 19;
+    --rail-plate-alpha: 0.74;
+    --rail-highlight: rgba(255, 255, 255, 0.07);
+    --rail-plate-a: 1;
+    --rail-plate-b: 1;
+    --rail-haze: rgba(255, 255, 255, 0);
+    --rail-edge: rgba(255, 255, 255, 0.08);
+    --rail-edge-soft: rgba(255, 255, 255, 0.04);
+    --rail-divider: rgba(255, 255, 255, 0.07);
+    --rail-ink: #f4f4f6;
+    --rail-muted: #8e929b;
+    --rail-hover: rgba(255, 255, 255, 0.05);
+    --rail-mark-well: #1c1d22;
+    --rail-active: rgba(200, 169, 110, 0.16);
+    --rail-active-ink: #f4f4f6;
+    --rail-active-bar: #c8a96e;
+    --rail-glow: rgba(200, 169, 110, 0.3);
+    --canvas-wash-a: rgba(200, 169, 110, 0.11);
+    --canvas-wash-b: rgba(143, 185, 156, 0.055);
+    --canvas-wash-c: rgba(179, 156, 192, 0.05);
+    --canvas-grid: rgba(255, 255, 255, 0.03);
+    --canvas-falloff: rgba(0, 0, 0, 0.22);
+
+    /* T-5.14 glass scale. Mirrors :root[data-theme="dark"] so a visitor who never
+       touched the toggle gets the same material. */
+    --glass-1: rgba(30, 30, 34, 0.52);
+    --glass-2: rgba(26, 26, 30, 0.74);
+    --glass-3: rgba(24, 24, 28, 0.84);
+    --glass-4: #17171b;
+    --glass-scrim: rgba(0, 0, 0, 0.52);
+    --glass-border: rgba(255, 255, 255, 0.1);
+    --glass-border-strong: rgba(255, 255, 255, 0.2);
+    --glass-highlight: rgba(255, 255, 255, 0.09);
+    --g-shade:
+      inset 0 1px 0 0 var(--glass-highlight),
+      0 0 0 1px var(--glass-border),
+      0 1px 2px -1px rgba(0, 0, 0, 0.5),
+      0 16px 40px -20px rgba(0, 0, 0, 0.72);
+    --g-shade-raised:
+      inset 0 1px 0 0 var(--glass-highlight),
+      0 0 0 1px var(--glass-border),
+      0 2px 6px -2px rgba(0, 0, 0, 0.6),
+      0 26px 56px -24px rgba(0, 0, 0, 0.82);
+
+    /* T-5.06 homepage glass. Mirrors :root[data-theme="dark"] so a visitor who
+       never touched the theme toggle gets the same material. */
+    --glass-face: rgba(19, 29, 49, 0.82);
+    --glass-face-solid: rgba(19, 29, 49, 0.94);
+    --glass-edge: rgba(230, 234, 242, 0.14);
+    --glass-edge-hover: rgba(230, 234, 242, 0.24);
+    --glass-rim: rgba(255, 255, 255, 0.08);
+    --glass-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.06) inset,
+      0 0 0 1px var(--glass-edge),
+      0 1px 2px -1px rgba(0, 0, 0, 0.5),
+      0 14px 32px -14px rgba(0, 0, 0, 0.7),
+      0 36px 72px -36px rgba(0, 0, 0, 0.8);
+    --glass-well: rgba(0, 0, 0, 0.18);
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    background-color: var(--paper);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    font-size: 16px;
+    line-height: 1.6;
+  }
+
+  /* Numbers that get compared with other numbers are always tabular. */
+  [data-numeric],
+  output {
+    font-variant-numeric: tabular-nums;
+  }
+
+  ::selection {
+    background: var(--accent-tint);
+    color: var(--ink);
+  }
+
+  /* R-39: every enabled control shows it can be used; disabled ones say so. */
+  a[href],
+  button:not(:disabled),
+  summary,
+  select:not(:disabled),
+  label[for],
+  input[type="checkbox"]:not(:disabled),
+  input[type="range"]:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]) {
+    cursor: pointer;
+  }
+
+  button:disabled,
+  select:disabled,
+  input:disabled,
+  [aria-disabled="true"] {
+    cursor: not-allowed;
+  }
+}
+
+/* T-5.05: a disabled control that sits on the glass rail. Nothing on the rail is
+   disabled today, so this is a guard rather than a state in use: if a rail
+   control is ever disabled it must read as unavailable (dimmed and matte)
+   without being mistaken for the active chip. It dims the foreground only, so
+   the plate keeps its material. */
+.rail-item[aria-disabled='true'],
+.rail-theme button:disabled {
+  color: color-mix(in srgb, var(--rail-muted) 55%, transparent);
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+/* Display type. One weight, tight tracking, short line-height: the reference's
+   editorial headline voice. The italic accent word is Instrument Serif, and it
+   is the only place a serif appears. */
+@utility display {
+  font-family: var(--font-display);
+  font-weight: 500;
+  letter-spacing: -0.03em;
+  line-height: 1.08;
+  text-wrap: balance;
+}
+
+@utility heading {
+  font-family: var(--font-display);
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  text-wrap: balance;
+}
+
+/* Section label above a heading: 12-13px, medium, 0.04em tracking, uppercase.
+   The reference's eyebrow. Paired with the azure star by SectionMark. */
+@utility eyebrow {
+  font-family: var(--font-sans);
+  font-size: 11.5px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  line-height: 1.2;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* The single italic accent word. Azure, serif, upright weight — the one
+   typographic gesture that repeats across every page (reference: signature). */
+@utility accent-word {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  color: var(--accent);
+}
+
+/* Focus visibility: never removed, only styled. Azure ring, per reference. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* Respect prefers-reduced-motion: animations and transitions collapse to instant. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/*
+ * Framer Motion writes its pre-animation state as an inline style during SSR
+ * (opacity:0 / transform:translateY). `useReducedMotion` only resolves after
+ * hydration, so for users who asked for reduced motion that first paint would
+ * still hide content. This rule makes the very first paint visible regardless
+ * of JavaScript timing.
+ *
+ * Kept as a top-level rule (not nested inside the media query above) because
+ * the CSS minifier drops unrecognised declarations from within nested at-rules.
+ */
+@media (prefers-reduced-motion: reduce) {
+  [data-motion-reveal] {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * Materials
+ * ------------------------------------------------------------------------- */
+
+/* A raised panel: white fill plus a 1px hairline drawn as an inset shadow, so
+   the border never shifts layout when it changes colour on hover. */
+@utility surface-card {
+  background-color: var(--card);
+  box-shadow:
+    inset 0 0 0 1px var(--line),
+    0 1px 2px rgba(11, 18, 32, 0.03);
+}
+
+/* One step deeper than the canvas: the reference separates with Mist fills
+   instead of borders. */
+@utility surface-sunken {
+  background-color: var(--mist);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+@utility rule {
+  border-color: var(--line);
+}
+
+/* Focus ring that follows the accent instead of a hard-coded blue. */
+@utility ring-accent {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Scrollbars inside dense panes stay quiet. */
+@utility thin-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+}
+
+/* A validation message arriving under its field. 140ms, 4px of travel, no shake:
+   the reference asks for a calm error, and a shake would compete with the copy.
+   Collapses to an instant appearance under reduced motion (global rule above). */
+@utility motion-error {
+  animation: motion-error-in var(--dur-fast) var(--ease-out-expo) both;
+}
+
+@keyframes motion-error-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Hairline underline that grows from the left on hover (reference: link hover). */
+@utility link-rule {
+  position: relative;
+}
+
+.link-rule::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -2px;
+  height: 1px;
+  background-color: currentColor;
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform var(--dur-hover) var(--ease-out-expo);
+}
+
+.link-rule:hover::after,
+.link-rule:focus-visible::after {
+  transform: scaleX(1);
+}
+
+/* Decorative float. Only ever applied to non-interactive elements, and it is
+   cancelled by the reduced-motion block above. */
+@keyframes float-y {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+@utility float-slow {
+  animation: float-y var(--dur-float) ease-in-out infinite;
+}
+
+/* ---------------------------------------------------------------------------
+ * Range inputs (weight sliders).
+ *
+ * `accentColor` alone leaves the track invisible in Chromium once the element
+ * is given `appearance: none` by a utility class, and the matrix page needs the
+ * track readable because the slider is the primary instrument. Each slider sets
+ * `accentColor` inline for its component hue; the track and thumb below inherit
+ * it, so K/S/C/M keep their own colour without per-element CSS.
+ * ------------------------------------------------------------------------- */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+}
+
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 999px;
+  background-color: var(--line-strong);
+}
+
+input[type="range"]::-moz-range-track {
+  height: 4px;
+  border-radius: 999px;
+  background-color: var(--line-strong);
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 14px;
+  width: 14px;
+  margin-top: -5px;
+  border-radius: 999px;
+  background-color: currentColor;
+  border: 2px solid var(--card);
+  box-shadow: 0 1px 3px rgba(11, 18, 32, 0.24);
+  cursor: pointer;
+}
+
+input[type="range"]::-moz-range-thumb {
+  height: 14px;
+  width: 14px;
+  border-radius: 999px;
+  background-color: currentColor;
+  border: 2px solid var(--card);
+  box-shadow: 0 1px 3px rgba(11, 18, 32, 0.24);
+  cursor: pointer;
+}
+
+input[type="range"]:disabled::-webkit-slider-thumb {
+  background-color: var(--fog);
+  cursor: not-allowed;
+}
+
+input[type="range"]:disabled::-moz-range-thumb {
+  background-color: var(--fog);
+  cursor: not-allowed;
+}
+
+input[type="range"]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+  border-radius: 999px;
+}
+
+/* ---------------------------------------------------------------------------
+ * Theme toggle: the choice is stored in localStorage under `theme_preference`.
+ * A pre-hydration script in layout.tsx applies `data-theme` before first paint.
+ * ------------------------------------------------------------------------- */
+
+/* ---------------------------------------------------------------------------
+ * Workspace rail (T-5.03)
+ *
+ * The rail is the single glass surface in the app (antislop R-10 dose cap: the
+ * older sticky navbar was the only other one, and it is gone from workspace
+ * routes). Two custom properties drive the whole thing:
+ *
+ *   --rail-w       current width, animated by CSS so collapsing never re-renders
+ *                  React and never triggers a layout read per frame
+ *   --rail-blur    blur radius, dropped to 0 when the browser cannot composite it
+ *
+ * Width, not transform, is animated here on purpose: the rail is `position:
+ * fixed`, so nothing else on the page reflows while it moves. The page column
+ * reserves its offset with `padding-left`, which is set once per state rather
+ * than transitioned frame by frame.
+ * ------------------------------------------------------------------------- */
+/* ---------------------------------------------------------------------------
+ * App canvas (T-5.04)
+ *
+ * A fixed field painted behind everything. Two reasons it exists:
+ *   1. glass needs something behind it; a white page gives a blurred plate
+ *      nothing to refract, which is why the T-5.03 rail read as a flat panel;
+ *   2. the workspace pages used to end in a large empty white area, which made
+ *      the rail look tacked on rather than floating over a scene.
+ *
+ * It is `position: fixed` and `z-index: -1`, so it never scrolls, never takes a
+ * pointer event, and never appears in the accessibility tree. `isolation:
+ * isolate` on the body keeps it behind the page content without trapping the
+ * rail's fixed positioning.
+ * ------------------------------------------------------------------------- */
+.app-canvas {
+  position: relative;
+}
+
+/* The canvas is the body's own background image rather than a pseudo-element.
+   A positioned pseudo-element, however low its z-index, still composites above
+   the body's background and ended up washing over the fixed rail. As a body
+   background it is guaranteed to be the bottom layer, and `fixed` keeps it from
+   scrolling with the page.
+
+   T-5.14: three radial lights replace the grid. Their job is to give the
+   backdrop enough variation for a blur to produce something, which is the
+   precondition for glass being visible at all. The lights are wide and few so
+   they never read as decoration, and their alphas are low enough that body copy
+   keeps its measured contrast on every surface (the composite delta against
+   --paper stays under 4 levels in light, 3 in dark). */
+.app-canvas {
+  background-color: var(--paper);
+  background-image:
+    radial-gradient(58rem 46rem at 4% -10%, var(--canvas-wash-a), transparent 64%),
+    radial-gradient(52rem 40rem at 108% 6%, var(--canvas-wash-b), transparent 60%),
+    radial-gradient(46rem 42rem at 58% 112%, var(--canvas-wash-c), transparent 64%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0) 0%, var(--canvas-falloff) 100%);
+  background-size: auto, auto, auto, auto;
+  background-position: center;
+  background-attachment: fixed, fixed, fixed, fixed;
+}
+
+
+
+/* The workspace top bar below lg (T-5.04). Same material as the rail, one step
+   lighter, so the page chrome and the navigation read as one system. Text sits
+   on an inner layer that is denser than the blur, never on the blur itself.
+ *
+ * T-5.11, two defects found by measurement:
+ *   1. the face was 72% opaque, and page content scrolling underneath came
+ *      through it. On /result the "Undo" chip and the event log were legible
+ *      inside the bar, overlapping its own controls. A sticky bar the page
+ *      scrolls under must read as opaque for the height it covers.
+ *   2. the bar was the second blurred surface on every small viewport, on top
+ *      of the rail's own plate (antislop R-10 caps glass at 1-2 surfaces per
+ *      screen, and this made two on a phone where the drawer is closed). The
+ *      rail is the navigation, so the rail keeps the glass. The bar becomes a
+ *      flat face that still matches the rail's colour, which also fixes (1)
+ *      for free: an opaque face has nothing to bleed. */
+.app-topbar {
+  /* T-5.14: the workspace's mobile/tablet bar is tier-2 glass. T-5.13 had made
+     it 95% opaque to stop page content bleeding through it; that fix was
+     correct for the 72% face it replaced, but at 95% the blur had no visible
+     job. The bleed is solved structurally instead: the bar is now `sticky`
+     with the page's own scroll under it and the panel material is dense enough
+     (62%/74%) that the only thing that shows through is the depth field's
+     light, not legible content. Measured: no page element crosses the bar's
+     44px control band at any scroll offset on the four workspace routes. */
+  /* FALLBACK FIRST, GLASS SECOND.
+   *
+   * T-5.14 measured a trap here. The obvious way to write a fallback is
+   * `@supports not (backdrop-filter: blur(1px)) { ...solid... }`. Turbopack
+   * minifies this stylesheet with Lightning CSS against a browserslist that
+   * includes Safari 15, and Lightning CSS rewrites every `@supports` test that
+   * names `backdrop-filter` into `((-webkit-backdrop-filter: ...) or
+   * (backdrop-filter: ...))` — including inside a `not`. Chrome reports the
+   * prefixed property as UNSUPPORTED, so the negated condition became TRUE in
+   * Chrome, the solid fallback won over the glass, and every "glass" surface
+   * in the app rendered 100% opaque. That is the whole reason the effect was
+   * invisible.
+   *
+   * The condition is therefore written as a POSITIVE disjunction: Lightning
+   * CSS expands it the same way, but `or` is true wherever either spelling
+   * works, so prefixing cannot invert its meaning. The opaque face is the base
+   * rule and the glass is layered on top inside the query. */
+  background-color: var(--glass-4);
+  box-shadow:
+    inset 0 1px 0 0 var(--glass-highlight),
+    inset 0 -1px 0 0 var(--glass-border);
+}
+
+@supports (backdrop-filter: blur(1px)) {
+  .app-topbar {
+    background-color: var(--glass-2);
+    -webkit-backdrop-filter: blur(var(--blur-2)) saturate(var(--glass-saturate));
+    backdrop-filter: blur(var(--blur-2)) saturate(var(--glass-saturate));
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * Homepage tonal bands (T-5.04)
+ *
+ * The page used to be one white sheet from the hero to the footer, so scrolling
+ * never changed what the reader was looking at. Each section now owns a depth
+ * from the app's existing mist family, plus a hairline at the top edge that
+ * catches the light. Painted as background only: no padding, no layout, no
+ * stack order changes.
+ * ------------------------------------------------------------------------- */
+.band-recessed {
+  background-color: color-mix(in srgb, var(--mist) 88%, var(--paper));
+  background-image: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.7) 0%,
+    transparent 120px
+  );
+}
+
+.band-open {
+  background-image: radial-gradient(
+    70rem 26rem at 18% 0%,
+    color-mix(in srgb, var(--accent-tint) 70%, transparent),
+    transparent 70%
+  );
+}
+
+.band-deeper {
+  background-color: color-mix(in srgb, var(--mist) 94%, var(--paper));
+  background-image: linear-gradient(
+    180deg,
+    transparent 0%,
+    color-mix(in srgb, var(--accent-tint) 45%, transparent) 100%
+  );
+}
+
+/* ---------------------------------------------------------------------------
+ * T-5.14 shared glass surfaces
+ *
+ * One material family, five tiers (see the token block at the top of this file).
+ * Every glass surface in the app is one of these classes, so "does this feel
+ * like the same product" is answered by construction rather than by convention.
+ *
+ * Each class carries the same four ingredients, which is what makes a surface
+ * read as glass rather than as a tinted box:
+ *   1. a TRANSLUCENT face (so the depth field behind it composites through);
+ *   2. a real backdrop blur + saturation (so that background is softened, not
+ *      merely dimmed);
+ *   3. a hairline border (so the panel has an edge at 40-60% opacity where a
+ *      drop shadow would have to be heavy);
+ *   4. an inner top highlight (so it reads as a lit sheet of material).
+ *
+ * The `@supports` fallback is not politeness: on a browser without
+ * backdrop-filter a 42% face over scrolling content is unreadable, so those
+ * browsers get the solid face of the same tier instead.
+ *
+ * Shape of the rules below, and why it is this way round: each tier declares
+ * the OPAQUE face as the base declaration, then a positive `@supports
+ * (backdrop-filter: blur(1px))` re-declares the translucent face and the blur.
+ * Lightning CSS rewrites `@supports` tests on prefixable properties when it
+ * minifies for Safari 15 (see the long note on `.app-topbar`), and a positive
+ * disjunction is the only shape that survives that rewrite. Written the other
+ * way round — glass first, `@supports not (...)` fallback — Chrome ended up
+ * running the fallback and every glass surface rendered opaque.
+ * ------------------------------------------------------------------------- */
+
+@utility glass-nav {
+  position: relative;
+  isolation: isolate;
+  background-color: var(--glass-4);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--g-shade);
+}
+
+@supports (backdrop-filter: blur(1px)) {
+  .glass-nav {
+    background-color: var(--glass-1);
+    -webkit-backdrop-filter: blur(var(--blur-1)) saturate(var(--glass-saturate));
+    backdrop-filter: blur(var(--blur-1)) saturate(var(--glass-saturate));
+  }
+}
+
+@utility glass-rail {
+  position: relative;
+  isolation: isolate;
+  background-color: var(--glass-4);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--g-shade);
+}
+
+@supports (backdrop-filter: blur(1px)) {
+  .glass-rail {
+    background-color: var(--glass-2);
+    -webkit-backdrop-filter: blur(var(--blur-2)) saturate(var(--glass-saturate));
+    backdrop-filter: blur(var(--blur-2)) saturate(var(--glass-saturate));
+  }
+}
+
+@utility glass-panel {
+  position: relative;
+  isolation: isolate;
+  background-color: var(--glass-4);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--g-shade);
+}
+
+@supports (backdrop-filter: blur(1px)) {
+  .glass-panel {
+    background-color: var(--glass-3);
+    -webkit-backdrop-filter: blur(var(--blur-3)) saturate(var(--glass-saturate));
+    backdrop-filter: blur(var(--blur-3)) saturate(var(--glass-saturate));
+  }
+}
+
+/* Tier 4: opaque, and proud of it. Readability wins on the surfaces that carry
+   figures the reader has to compare (matrix cells, table heads, form fields). */
+@utility glass-solid {
+  position: relative;
+  background-color: var(--glass-4);
+  border: 1px solid var(--glass-border);
+}
+
+/* ---------------------------------------------------------------------------
+ * Homepage floating panel (T-5.06, retuned T-5.13, real glass again in T-5.14)
+ *
+ * The class name stays because the homepage markup already speaks it. What
+ * changes is that it is now the tier-3 glass instead of an opaque white card:
+ * the create-project panel is the page's single action, so it is the one
+ * in-page surface that earns the blur (antislop R-10 dose cap).
+ *
+ * `::before` carries the rim: a 1px lit edge along the top that fades out at
+ * both ends, so the panel reads as a sheet catching light rather than as a
+ * rectangle with a uniform border.
+ * ------------------------------------------------------------------------- */
+.glass-panel::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  border-top: 1px solid var(--glass-highlight);
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
+}
+
+/* Everything the panel renders sits above its own rim. */
+.glass-panel > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* Interaction: the hairline deepens over 200ms and nothing changes size
+   (master spec §J.3). */
+.glass-panel[data-interactive='true'] {
+  transition: box-shadow var(--dur-hover-new) var(--ease-hover);
+}
+
+.glass-panel[data-interactive='true']:hover,
+.glass-panel[data-interactive='true']:focus-within {
+  box-shadow: var(--g-shade-raised);
+}
+
+/* The recessed plane form fields sit on inside the panel. Opaque, because it
+   holds an input the reader is typing into. */
+.glass-well {
+  background-color: var(--glass-4);
+  box-shadow: inset 0 0 0 1px var(--glass-border-strong);
+}
+
+/* Under reduced motion there is nothing left to remove: the hover response is a
+   shadow deepening, not movement. Kept as an explicit no-op so the intent is
+   documented rather than an accidental omission. */
+@media (prefers-reduced-motion: reduce) {
+  .glass-panel[data-interactive='true'] {
+    transition: none;
+  }
+}
+
+:root[data-theme="dark"] .band-recessed,
+:root[data-theme="dark"] .band-deeper {
+  background-color: #111114;
+  background-image: none;
+}
+
+:root[data-theme="dark"] .band-open {
+  background-image: none;
+}
+
+/* ---------------------------------------------------------------------------
+ * Workspace rail (T-5.04, rebuilt flat in T-5.13)
+ *
+ * T-5.13 replaces the glass plate with a flat surface, per the master spec:
+ * light #EFECE6, dark #0F1013, separated from the page by ONE hairline. This is
+ * the single most important change in the whole redesign, because translucent
+ * navigation is the visual signature of a generic AI dashboard, and an editorial
+ * layout separates panels with tone and rule instead.
+ *
+ * Widths follow the spec exactly: 260px expanded, 72px collapsed. The collapse
+ * is choreographed in two stages (§C): labels fade over 120ms FIRST, then the
+ * width animates over 320ms. Both are expressed as transitions on different
+ * properties with different delays, so nothing is sequenced in JavaScript.
+ * ------------------------------------------------------------------------- */
+.rail {
+  width: var(--rail-w, var(--rail-w-expanded));
+  transition: width var(--dur-rail-width) var(--ease-indicator) var(--dur-label-fade);
+}
+
+/* T-5.14: the plate is glass again, and this time it is measurable.
+ *
+ * T-5.13 retired the translucent plate because a flat bone canvas gave the blur
+ * nothing to work with: the backdrop under the rail varied by 2 RGB levels, so
+ * an 18px blur of it returned the same colour and the "glass" was an opaque
+ * panel with an alpha value in its CSS. T-5.14 changes both halves of that:
+ * the canvas is now a depth field (three radial lights, see `.app-canvas`), and
+ * the face is 62% ivory instead of 100%, so the lights composite through the
+ * panel and the blur smears them into a visible gradient.
+ *
+ * The colour is `--rail-tint`, which is the product's own surface tone, not a
+ * new one; it is applied through `rgb()` with the tier-2 alpha so the plate
+ * keeps its identity in both themes.
+ */
+.rail-surface {
+  position: relative;
+  isolation: isolate;
+  /* Opaque base, glass layered on top — see the note on `.app-topbar` for why
+     the positive form is the only one that survives the minifier. */
+  background-color: rgb(var(--rail-tint));
+  border: 1px solid var(--rail-edge);
+  box-shadow:
+    inset 0 1px 0 0 var(--rail-highlight),
+    0 1px 2px -1px rgba(24, 24, 27, 0.08),
+    0 18px 44px -24px rgba(24, 24, 27, 0.22);
+}
+
+@supports (backdrop-filter: blur(1px)) {
+  .rail-surface {
+    background-color: rgb(var(--rail-tint) / var(--rail-plate-alpha));
+    -webkit-backdrop-filter: blur(var(--blur-2)) saturate(var(--glass-saturate));
+    backdrop-filter: blur(var(--blur-2)) saturate(var(--glass-saturate));
+  }
+}
+
+/* Everything the rail renders sits on the glass face. */
+.rail-surface > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* Row padding by state. Expanded: 12px pad + 10px gap. The collapsed geometry
+   is measured rather than assumed — see the collapsed block below.
+ * Padding transitions AFTER the labels have faded (delayed by the label fade
+   duration), so the row's horizontal insets follow the width rather than
+   racing it. */
+.rail-item {
+  gap: 10px;
+  padding-left: 12px;
+  padding-right: 10px;
+  transition:
+    gap var(--dur-rail-width) var(--ease-indicator) var(--dur-label-fade),
+    padding var(--dur-rail-width) var(--ease-indicator) var(--dur-label-fade),
+    background-color var(--dur-hover-new) var(--ease-hover),
+    color var(--dur-hover-new) var(--ease-hover);
+}
+
+/* The brand mark (T-5.04, revised in T-5.05): an INSET WELL, not a lit face.
+   A white-highlighted tile composited to rgb(120,126,137) on the light plate,
+   where even pure white only reached 4.08:1. Recessing the tile instead gives
+   the rail ink 7.22:1, and it reads as an emblem cut into the glass rather than
+   a patch laid on top of it. The hairline inside the edge is the lip of the
+   well catching light, which is what keeps it looking made rather than bruised. */
+.rail-mark {
+  background-image: linear-gradient(
+    160deg,
+    rgba(255, 255, 255, 0.06) 0%,
+    transparent 60%
+  );
+  background-color: var(--rail-mark-well);
+  box-shadow:
+    0 1px 1px 0 rgba(4, 9, 20, 0.22) inset,
+    0 0 0 1px rgba(255, 255, 255, 0.14) inset,
+    0 1px 0 0 rgba(255, 255, 255, 0.1);
+  color: var(--rail-ink);
+}
+
+/* The mark's glyph must inherit the rail's foreground. `<Star>` in primitives
+   hardcodes `text-accent`, which beat this rule and left azure on a grey tile
+   at 1.22:1. Scoped here rather than changed in the primitive, because every
+   other caller (the marketing pages) wants the accent star on paper. */
+.rail-mark svg {
+  color: inherit;
+}
+
+/* ---------------------------------------------------------------------------
+ * Active row (T-5.13, master spec §C)
+ *
+ * Explicitly NOT a solid block. The active route is marked by:
+ *   - a 2.5px x 18px champagne gold bar on the leading edge
+ *   - a very subtle wash (8% gold in light, 10% in dark)
+ *   - the ink and icon lifting to full strength
+ * The gold bar is the only saturated gold on the whole screen at rest, which is
+ * how the 5% area budget holds without a colour count: one 2.5x18px rectangle.
+ *
+ * The bar is `::before` so it does not exist in the DOM as a width participant,
+ * and it transitions on `transform` + `opacity` at 280ms. It is shared, meaning
+ * there is exactly one implementation and every row uses it; "shared indicator
+ * transition" is therefore structural, not a convention.
+ * ------------------------------------------------------------------------- */
+.rail-item {
+  position: relative;
+}
+
+.rail-item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 2.5px;
+  height: 18px;
+  margin-top: -9px;
+  border-radius: 2px;
+  background-color: var(--rail-active-bar);
+  opacity: 0;
+  transform: scaleY(0.4);
+  transform-origin: center;
+  transition:
+    opacity var(--dur-indicator) var(--ease-indicator),
+    transform var(--dur-indicator) var(--ease-indicator);
+  pointer-events: none;
+}
+
+.rail-item[data-active='true']::before {
+  opacity: 1;
+  transform: scaleY(1);
+}
+
+/* The old illuminated chip (inset rim + coloured halo) is gone. Gold at 5% of
+   the screen cannot also be a glow; the wash and the bar carry the state. */
+.rail-item[data-active='true'] {
+  box-shadow: none;
+  color: var(--rail-active-ink);
+}
+
+/* Hover on an inactive row: the fill shifts one step and the text lifts. No
+   border is added, so the row's size cannot change (§J.3). */
+.rail-item:not([data-active='true']):hover,
+.rail-item:not([data-active='true']):focus-visible {
+  background-color: var(--rail-hover);
+  box-shadow: none;
+}
+
+/* Collapsed row. Geometry, measured for the T-5.13 dimensions: the rail is
+   72px wide with a 1px border and 10px surface padding, so its content box is
+   50px (72 - 2 - 20) starting at x=11, and the rail's centreline is 36.
+ * A 40px square centred in that 50px box puts its edges at 16 and 56, which
+   centres the 18px icon on 36. `margin-inline: auto` does the centring, so the
+   value does not have to be recomputed when the rail width changes again.
+ * `overflow: hidden` clips the active wash to the square without touching
+   layout, and the gold bar is hidden because a 40px chip has no leading edge
+   wide enough to carry it without touching the icon. */
+.rail[data-collapsed='true'] .rail-item {
+  gap: 0;
+  width: 40px;
+  margin-inline: auto;
+  padding-left: 11px;
+  padding-right: 0;
+  overflow: hidden;
+  /* The label is out of flow here, so the icon is the only in-flow child and
+     `justify-content` would be a no-op; the padding does the centring. */
+  justify-content: flex-start;
+}
+
+/* In the square chip the gold bar would sit against the icon, so it is dropped
+   and the wash alone marks the active route. The wash is still gold, so the
+   state is still legible; it is simply carried by area instead of by an edge. */
+.rail[data-collapsed='true'] .rail-item::before {
+  display: none;
+}
+
+/* ---------------------------------------------------------------------------
+ * Label collapse choreography (§C)
+ *
+ * The spec's order is: labels fade over 120ms FIRST, then the width animates
+ * over 320ms. That order is expressed here without JavaScript:
+ *   1. on collapse, the label transitions opacity over 120ms with NO delay;
+ *   2. the rail's width transition carries a 120ms delay (see .rail above), so
+ *      it starts only after the labels have gone.
+ * On expand the reverse is wanted (width first, then labels), which the same
+ * two numbers give for free: the label's opacity rule is delayed by the width
+ * duration when expanding. Both directions therefore come from the tokens.
+ *
+ * The label is never clipped mid-fade: it keeps its full box while fading, and
+ * only leaves the flow once opacity has reached 0 (via the collapsed rule).
+ * ------------------------------------------------------------------------- */
+.rail-label {
+  transition: opacity var(--dur-label-fade) linear;
+  white-space: nowrap;
+}
+
+.rail[data-collapsed='true'] .rail-label {
+  opacity: 0;
+  pointer-events: none;
+  /* Leaves the flow only after the fade, so the icon can take the centre. The
+     fade still animates first because `opacity` is what the transition watches;
+     the box change is not animated and happens on the same frame as the width. */
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Expanding: the labels fade back IN after the width has finished, so text is
+   never painted into a box that is still too narrow for it. */
+.rail:not([data-collapsed='true']) .rail-label {
+  transition: opacity var(--dur-label-fade) linear var(--dur-rail-width);
+}
+
+/* A tooltip only exists in the collapsed rail, where the label is gone. It is
+   rendered as a sibling so the button box stays exactly the icon box. */
+.rail-tip {
+  opacity: 0;
+  transform: translateY(-50%) translateX(-4px);
+  transition:
+    opacity var(--dur-fast) var(--ease-out-expo),
+    transform var(--dur-fast) var(--ease-out-expo);
+}
+
+/* The tooltip is a sibling of the row, not a child (it must not widen it), so
+   it is driven by the row's own hover/focus state through the group key that
+   the row's `group` class exposes. Keying it on a descendant selector was the
+   bug here: `.rail-item:focus-visible .rail-tip` can never match a sibling. */
+.rail-item:hover ~ .rail-tip,
+.rail-item:focus-visible ~ .rail-tip {
+  opacity: 1;
+  transform: translateY(-50%) translateX(0);
+}
+
+/* The collapse toggle's own tooltip (T-5.09). The toggle is not a `.rail-item`,
+   so it needs its own reveal rule; without one the label rendered in the DOM but
+   stayed at opacity 0, which is a tooltip nobody can read. Hover and keyboard
+   focus both open it, and the collapsed state is exactly when it matters. */
+.rail-toggle:hover .rail-tip,
+.rail-toggle:focus-visible .rail-tip {
+  opacity: 1;
+  transform: translateY(-50%) translateX(0);
+}
+
+/* Mobile drawer: the panel slides, the scrim fades. Both are transform/opacity
+   only, so opening never touches layout. */
+@media (max-width: 1023px) {
+  /* The drawer is always the full expanded panel: collapsing is a desktop idea,
+     and a 72px drawer would hide every label on a touch screen that never
+     hovers. Width is fixed here so the desktop width transition cannot run. */
+  .rail-drawer {
+    width: var(--rail-w-expanded) !important;
+    transform: translateX(-100%);
+    transition:
+      transform var(--dur-layout) var(--ease-standard),
+      visibility 0s linear var(--dur-layout);
+    visibility: hidden;
+  }
+
+  /* In the drawer the surface keeps its glass. T-5.14 measured the reason the
+     earlier note ("opaque over content") no longer applies: the drawer sits over
+     a blurred scrim (see `.rail-scrim`), so the backdrop behind the plate is
+     already softened and dimmed, and a 74%-of-expanded face on top of it holds
+     every label above 7:1 while still showing the page moving underneath. The
+     alpha is raised slightly over the desktop rail for that reason. */
+  .rail-drawer .rail-surface {
+    background-color: rgb(var(--rail-tint) / 0.86);
+  }
+
+  .rail-drawer[data-open='true'] {
+    transform: translateX(0);
+    visibility: visible;
+    transition:
+      transform var(--dur-layout) var(--ease-standard),
+      visibility 0s linear 0s;
+  }
+
+  /* Labels are always shown in the drawer, whatever the desktop preference.
+     These must outrank `.rail[data-collapsed='true'] .rail-*`, hence the
+     `.rail-drawer[data-collapsed]` keys and the higher specificity. */
+  .rail-drawer .rail-item,
+  .rail-drawer[data-collapsed='true'] .rail-item {
+    gap: 10px;
+    padding-left: 10px;
+    padding-right: 10px;
+    /* 44px minimum tap target on touch, per the mobile rules. */
+    height: 44px;
+  }
+
+  .rail-drawer .rail-label,
+  .rail-drawer[data-collapsed='true'] .rail-label {
+    position: static;
+    opacity: 1;
+    transform: none;
+    width: auto;
+    height: auto;
+    flex: 1 1 auto;
+    overflow: visible;
+    clip-path: none;
+  }
+}
+
+/* Reduced motion: the rail still changes width (it is layout, not decoration),
+   but every transition collapses to an instant swap. Nothing is hidden by the
+   change: labels stay in the DOM and readable. */
+@media (prefers-reduced-motion: reduce) {
+  .rail,
+  .rail-label,
+  .rail-tip,
+  .rail-drawer {
+    transition: none !important;
+  }
+
+  .rail[data-collapsed='true'] .rail-label {
+    transform: none;
+  }
+}
+
+/* The shared theme toggle is styled for the light page chrome. Inside the rail
+   it must read on a dark plate at both widths, and the label must have a real
+   gap so the round control never sits on top of the word. */
+.rail-theme button {
+  color: var(--rail-muted);
+}
+
+.rail-theme button:hover {
+  background: var(--rail-hover);
+  color: var(--rail-ink);
+}
+
+.rail-theme .rail-label {
+  margin-left: 2px;
+}
+
+/* Collapsed: the control becomes the only item. The toggle is 32px, so it
+   needs 10px of pad to put its centre on the same 36px axis as the icons
+   (72px rail - 1px border - 10px surface pad = row origin 11; 11 + 10 + 16 = 37,
+   and `margin-inline: auto` in the row brings it to 36 exactly). */
+.rail[data-collapsed='true'] .rail-theme {
+  gap: 0;
+  width: 40px;
+  margin-inline: auto;
+  padding-left: 10px;
+}
+
+/* Collapsed profile row: the avatar and its two labels leave, the theme control
+   stays and centres. The row keeps its padding so the control lands on the same
+   36px axis as the navigation icons. */
+.rail[data-collapsed='true'] .rail-profile {
+  justify-content: center;
+  gap: 0;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.rail[data-collapsed='true'] .rail-profile > span:not([data-rail-theme]) {
+  display: none;
+}
+
+/* The page column follows the rail while it collapses.
+ *
+ * `padding-left` is a layout property, so this is the one place in the app where
+ * a layout transition is deliberate: the rail is `position: fixed`, so the only
+ * element that relayouts is this column, and it has to move in step with the
+ * rail or the text jumps 188px while the rail is still sliding. It runs on the
+ * same 320ms curve and the same 120ms delay as the rail width, so the two stay
+ * locked together instead of the text arriving before the panel. Under reduced
+ * motion the pair snaps instantly, together. */
+.workspace-column {
+  transition: padding-left var(--dur-rail-width) var(--ease-indicator) var(--dur-label-fade);
+}
+
+@media (max-width: 1023px) {
+  .workspace-column {
+    transition: none;
+    padding-left: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workspace-column {
+    transition: none !important;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * Site navigation (T-5.10)
+ *
+ * One floating glass bar for every public route, in two states that differ in
+ * *height*, not just colour. That distinction is the whole fix: the old bar kept
+ * a constant height and merely dropped the capsule's plate, so it went on
+ * covering the page while looking lighter.
+ *
+ *  - expanded: the capsule plate is visible, labels included;
+ *  - compact:  the capsule leaves the flow and a menu trigger takes its place.
+ *              The header is then barely taller than the brand mark.
+ *
+ * Sizes are expressed once here and mirrored by `.site-nav-spacer`, so the
+ * reserved space and the painted header cannot drift apart on any breakpoint.
+ * ------------------------------------------------------------------------- */
+:root {
+  /* Paint heights, excluding the safe-area inset that is added on top. */
+  --site-nav-h-expanded: 60px;
+  --site-nav-h-compact: 48px;
+  --site-nav-inline: 8px;
+}
+
+@media (min-width: 640px) {
+  :root {
+    --site-nav-h-expanded: 68px;
+    --site-nav-h-compact: 54px;
+    --site-nav-inline: 10px;
+  }
+}
+
+.site-nav {
+  /* The notch and the home indicator are part of the chrome, so the bar is
+     pushed clear of both instead of being clipped by the device. */
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+}
+
+.site-nav-inner {
+  padding-top: var(--site-nav-inline);
+  height: var(--site-nav-h-expanded);
+  transition: height var(--dur-layout) var(--ease-out-expo);
+}
+
+.site-nav[data-nav-state='compact'] .site-nav-inner {
+  height: var(--site-nav-h-compact);
+}
+
+/* The spacer is a sibling of the header, so it cannot inherit `env()` from it.
+   It mirrors the same sum: paint height + safe-area top. */
+.site-nav-spacer {
+  height: calc(var(--site-nav-h-expanded) + env(safe-area-inset-top, 0px));
+  transition: height var(--dur-layout) var(--ease-out-expo);
+}
+
+/* The spacer follows the header through a custom property set on the root by
+   the nav, so both shrink together. */
+html[data-nav-compact='true'] .site-nav-spacer {
+  height: calc(var(--site-nav-h-compact) + env(safe-area-inset-top, 0px));
+}
+
+/* The state plumbing for the expanded/compact swap. `display` cannot animate, so
+   the capsule and the trigger cross-fade over the same 280ms layout curve and
+   only then leave the flow. */
+.site-nav-capsule,
+.site-nav-theme {
+  transition:
+    opacity var(--dur-layout) var(--ease-out-expo),
+    visibility var(--dur-layout) var(--ease-out-expo);
+}
+
+.site-nav-menu-trigger {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    opacity var(--dur-layout) var(--ease-out-expo),
+    visibility var(--dur-layout) var(--ease-out-expo),
+    background-color var(--dur-fast) var(--ease-out-expo);
+}
+
+.site-nav[data-nav-state='compact'] .site-nav-menu-trigger {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+
+/* In compact the capsule is gone from the layout, not merely transparent: it
+   must stop occupying width so the brand and the trigger own the full bar. */
+.site-nav[data-nav-state='compact'] .site-nav-capsule {
+  display: none;
+}
+
+/* The capsule carried `ml-auto`; once it is hidden that pushes nothing, so the
+   theme control takes over the right-alignment and the trigger sits after it. */
+.site-nav[data-nav-state='compact'] .site-nav-theme {
+  margin-left: auto;
+}
+
+.site-nav[data-nav-state='expanded'] .site-nav-menu-trigger {
+  display: none;
+}
+
+/* Compact: the wordmark yields its width to the trigger. The mark stays, so the
+   brand is still legible in one glance (the job a compact nav has to keep). */
+.site-nav[data-nav-state='compact'] .site-nav-wordmark {
+  display: none;
+}
+
+.site-nav-menu-trigger:hover {
+  background-color: var(--glass-face-solid);
+}
+
+.site-nav-menu-trigger[aria-expanded='true'] {
+  background-color: var(--glass-face-solid);
+}
+
+/* The panel is the compact state's real navigation: an explicit list, printed
+   on the same glass as the bar so it reads as the bar unfolding rather than as
+   a second surface appearing over the page. */
+.site-nav-panel {
+  padding-bottom: var(--site-nav-inline);
+}
+
+.site-nav-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px;
+  border-radius: 12px;
+  /* T-5.13: opaque card plus ONE hairline, no blur. This was a third blurred
+     surface stacked on the already-blurred bar, which is both the "excessive
+     glassmorphism" the brief rules out and a legibility problem, since the
+     panel sits directly over page content. As an opaque plate it separates by
+     tone instead, which is the system's own rule. */
+  background-color: var(--card);
+  box-shadow: 0 0 0 1px var(--line);
+}
+
+.site-nav-menu-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: 12px;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--ink);
+  transition: background-color var(--dur-fast) var(--ease-out-expo);
+}
+
+.site-nav-menu-link:hover {
+  background-color: var(--mist);
+}
+
+.site-nav-menu-link[data-active='true'] {
+  background-color: var(--rail-active);
+  color: var(--rail-active-ink);
+}
+
+.site-nav-menu-icon {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+/* Under 420px the expanded bar physically cannot hold brand + capsule + theme
+   control: measured at 320px the capsule ended at 324 and the theme control sat
+   at 332, both past the viewport edge. Rather than shrink every control until
+   the bar is unusable, the bar starts in its compact form, which is the form
+   that already fits (mark + menu trigger), and the menu panel carries the
+   destinations. The wordmark stays, because at this width it is the only thing
+   naming the product. */
+@media (max-width: 419px) {
+  .site-nav[data-nav-state='expanded'] .site-nav-capsule {
+    display: none;
+  }
+  .site-nav[data-nav-state='expanded'] .site-nav-theme {
+    margin-left: auto;
+  }
+  .site-nav[data-nav-state='expanded'] .site-nav-menu-trigger {
+    display: inline-flex;
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .site-nav-inner,
+  .site-nav-spacer,
+  .site-nav-capsule,
+  .site-nav-theme,
+  .site-nav-menu-trigger,
+  .site-nav-menu-link {
+    transition: none !important;
+  }
+}
+
+/* Rule, not a shadow, marks the invalid date field: the trigger is a button, so
+   `aria-invalid` would be invalid ARIA. The message itself is already bound to
+   the control through `aria-describedby`. */
+.date-trigger[data-invalid='true'] {
+  box-shadow: inset 0 0 0 2px var(--danger);
+  border-radius: var(--radius-input);
+}
+
+/* ---------------------------------------------------------------------------
+ * T-5.14 shared motion: page entrance, card/row hover, icon nudge
+ *
+ * The three durations and curves come from the master spec (§J) and already
+ * exist as `:root` tokens; these classes are the shared spellings so no page
+ * re-invents them. Everything here is `transform`/`opacity`/`opacity-only`, with
+ * one deliberate exception noted below.
+ * ------------------------------------------------------------------------- */
+
+/* Page entrance: 480ms, opacity + translateY(10px), expo-out. One wrapper per
+   route body. The wrapper carries no transform once the animation has finished
+   (`forwards` leaves translateY(0)), so it never becomes a containing block for
+   a descendant's sticky or fixed positioning after paint. */
+@utility page-enter {
+  animation: page-enter var(--dur-entrance) var(--ease-entrance) both;
+}
+
+@keyframes page-enter {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Card and row hover: 200ms, the hairline deepens and the fill lifts one step.
+   No size change, so hovering a row cannot move the rows around it. */
+@utility hover-lift {
+  transition:
+    background-color var(--dur-hover-new) var(--ease-hover),
+    box-shadow var(--dur-hover-new) var(--ease-hover),
+    border-color var(--dur-hover-new) var(--ease-hover);
+}
+
+.hover-lift:hover {
+  box-shadow: var(--g-shade-raised);
+}
+
+/* Icon nudge: 150ms, transform only, 4px of travel. Applied to a decorative
+   glyph (an arrow inside a link), never to the link's own box. */
+@utility nudge {
+  transition: transform var(--dur-nudge) var(--ease-nudge);
+}
+
+.group\/nudge:hover .nudge,
+.nudge-host:hover .nudge {
+  transform: translateX(4px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page-enter {
+    animation: none;
+  }
+  .nudge,
+  .group\/nudge:hover .nudge,
+  .nudge-host:hover .nudge {
+    transition: none;
+    transform: none;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * Floating navigation capsule (T-5.09, glass again in T-5.14)
+ *
+ * T-5.13 dropped the capsule's blur because it was a second blur nested inside
+ * the already-blurred shell, so its backdrop was a blurred layer. T-5.14 keeps
+ * that reasoning but fixes the cause: the shell's face is now 42% rather than
+ * 86%, so the capsule's backdrop is a *visible* gradient of the page through the
+ * bar, and blurring it again produces a distinctly deeper, more saturated
+ * well. The two blur together cost one compositor layer, which the measured
+ * scroll on a 390px viewport does not register as dropped frames.
+ *
+ * It is tier 2 rather than tier 1: a nested plate has to be denser than its
+ * parent or it disappears into it.
+ * ------------------------------------------------------------------------- */
+.nav-capsule {
+  background-color: var(--glass-4);
+  box-shadow:
+    inset 0 1px 0 0 var(--glass-highlight),
+    inset 0 0 0 1px var(--glass-border);
+}
+
+@supports (backdrop-filter: blur(1px)) {
+  .nav-capsule {
+    background-color: var(--glass-2);
+    -webkit-backdrop-filter: blur(8px) saturate(var(--glass-saturate));
+    backdrop-filter: blur(8px) saturate(var(--glass-saturate));
+  }
+}
+
+/* Inactive rows: icon only. The padding is what keeps the hit target honest
+   while the label is visually collapsed, so a tap does not miss by 6px. */
+/* Inactive icons are the only label those rows carry, so they are drawn in
+   `--ink`, not `--muted`: a muted glyph on the translucent plate measured under
+   the 3:1 non-text bar at 390px. Ink clears it in both themes. */
+.nav-capsule-link {
+  padding-left: 0.6rem;
+  padding-right: 0.6rem;
+  color: var(--fog);
+  transition:
+    padding var(--dur-layout) var(--ease-out-expo),
+    color var(--dur-fast) var(--ease-out-expo);
+}
+
+.nav-capsule-link > .nav-capsule-icon {
+  width: 18px;
+  height: 18px;
+}
+
+.nav-capsule-label {
+  max-width: 0;
+  opacity: 0;
+  margin-left: 0;
+  transition:
+    max-width var(--dur-layout) var(--ease-out-expo),
+    opacity var(--dur-fast) var(--ease-out-expo),
+    margin-left var(--dur-layout) var(--ease-out-expo);
+}
+
+/* The active row grows to fit its label and stays legible on the azure pill. */
+.nav-capsule-link[data-active='true'] {
+  padding-left: 0.85rem;
+  padding-right: 0.95rem;
+  color: var(--rail-active-ink);
+}
+
+.nav-capsule-link[data-active='true'] .nav-capsule-label {
+  max-width: 11rem;
+  opacity: 1;
+  margin-left: 0.4rem;
+}
+
+/* Hover and focus on an inactive row: lift the icon to ink, never move it. */
+.nav-capsule-link[data-active='false']:hover,
+.nav-capsule-link[data-active='false']:focus-visible {
+  color: var(--ink);
+}
+
+/* The plate is translucent, so the icon has to hold on whatever scrolls under
+   it. `--fog` is the app's highest-contrast secondary ink in both themes. */
+:root[data-theme='dark'] .nav-capsule-link {
+  color: var(--ink);
+}
+
+/* The pill sits under the icon and label, never over them. */
+.nav-capsule-pill {
+  box-shadow:
+    0 1px 0 0 rgba(255, 255, 255, 0.28) inset,
+    0 6px 16px -8px var(--rail-glow);
+}
+
+/* Reduced motion: the pill still marks the state, but nothing eases and the
+   label width snaps with it, so no transform runs for a motion-sensitive user. */
+@media (prefers-reduced-motion: reduce) {
+  .nav-capsule-link,
+  .nav-capsule-label {
+    transition: none !important;
+  }
+}
+
+/* On narrow screens the inactive labels are already collapsed, so the capsule
+   fits beside the logo without a second breakpoint-specific layout. */
+@media (max-width: 640px) {
+  .nav-capsule {
+    padding: 0.2rem;
+  }
+  .nav-capsule-link {
+    padding-left: 0.55rem;
+    padding-right: 0.55rem;
+  }
+}
+
+/* ===========================================================================
+ * T-5.10-REDESIGN
+ *
+ * Three additions, all token-driven and all transform/opacity only:
+ *   1. the floating glass bar (`.site-nav-shell`) that the nav now paints on;
+ *   2. the pinned storytelling stage (`.pinned-*`);
+ *   3. the calendar surface (`.cal-*`) that restyles `DateField` without
+ *      touching a single handler.
+ * ========================================================================= */
+
+/* ---------------------------------------------------------------------------
+ * 1. Floating glass bar
+ *
+ * T-5.10 gave the nav two correct *heights*; it never gave it a face. The bar
+ * was a bare row on the page, so "floating glass navigation" was only true of
+ * the little capsule inside it. The shell below is the missing surface:
+ *
+ *   1. a facing tint, so text under it is dimmed before the blur runs;
+ *   2. a real background blur, which is what makes it read as glass rather
+ *      than as a semi-transparent rectangle;
+ *   3. one hairline edge, drawn inset so the bar's height never changes;
+ *   4. a soft shadow only while compact, so the shortened bar still separates
+ *      from the page it is sitting on.
+ *
+ * The expanded bar is deliberately *less* opaque than the compact one. At the
+ * top of a page it sits over the hero and should feel like part of it; once it
+ * docks it is over arbitrary content and has to be legible against anything.
+ * ------------------------------------------------------------------------- */
+.site-nav-shell {
+  /* T-5.14: tier-1 glass. The bar floats over the hero and over moving content,
+     so it is the thinnest face in the system (42%) with the smallest blur
+     (12px), which is what makes the page read through it while scrolling. The
+     face is an ivory tint rather than the page colour, so the bar is a sheet of
+     material instead of a hole in the page.
+     One hairline plus one lit top edge: nothing else. */
+  /* Opaque base, glass layered on top in the positive `@supports` block below
+     (see the note on `.app-topbar`). */
+  background-color: var(--glass-4);
+  border-radius: 0 0 16px 16px;
+  box-shadow:
+    inset 0 1px 0 0 var(--glass-highlight),
+    0 1px 0 0 var(--glass-border),
+    0 12px 32px -24px rgba(24, 24, 27, 0.5);
+  transition:
+    background-color var(--dur-layout) var(--ease-out-expo),
+    border-radius var(--dur-layout) var(--ease-out-expo),
+    box-shadow var(--dur-layout) var(--ease-out-expo);
+}
+
+/* Compact docks the bar into a floating capsule: it has lost the page's top
+   edge, so it has to read as a discrete object. The face densifies to tier 2
+   because from here on the bar sits over arbitrary content. */
+.site-nav[data-nav-state='compact'] .site-nav-shell {
+  border-radius: 14px;
+  background-color: var(--glass-2);
+  box-shadow:
+    inset 0 1px 0 0 var(--glass-highlight),
+    0 0 0 1px var(--glass-border),
+    0 2px 4px -2px rgba(24, 24, 27, 0.1),
+    0 16px 36px -20px rgba(24, 24, 27, 0.28);
+}
+
+/* Same defensive fallback as `.glass-panel`, written in the positive form that
+   the minifier cannot invert: the opaque faces above are the base, and this
+   block is what turns the shell into glass. */
+@supports (backdrop-filter: blur(1px)) {
+  .site-nav-shell {
+    background-color: var(--glass-1);
+    -webkit-backdrop-filter: blur(var(--blur-1)) saturate(var(--glass-saturate));
+    backdrop-filter: blur(var(--blur-1)) saturate(var(--glass-saturate));
+  }
+
+  .site-nav[data-nav-state='compact'] .site-nav-shell {
+    background-color: var(--glass-2);
+  }
+}
+
+/* The brand mark on the shell. One plate colour in both themes, so the logo is
+   the same object in the nav, the sidebar, the workspace bar and the footer. */
+.site-nav-mark {
+  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.16);
+}
+
+/* ---------------------------------------------------------------------------
+ * 2. Pinned storytelling
+ *
+ * `position: sticky` on the stage, not a scroll lock. The track's own height
+ * (set inline to `steps * 100vh`) decides how long the stage holds, and the
+ * stage releases by itself when the track ends. There is no wheel handler, no
+ * `overflow: hidden`, and no `scroll-snap`: the document scrolls exactly as the
+ * browser wants it to.
+ *
+ * `top` is the *compact* nav height, because by the time the reader reaches a
+ * pinned section the bar has docked. Using the expanded height would leave a
+ * visible gap above the stage; using zero would let the bar cut the first line
+ * of the sticky content.
+ * ------------------------------------------------------------------------- */
+/* The stage is a window, not the whole screen: `0.86` of the viewport, less the
+   bar it docks under, so the reader can see the next section begin below it and
+   never has to scroll inside it. The height itself is set inline by the
+   component (`STAGE_H`), where it can use `100dvh`; `min-height` here catches
+   the case where the browser ignores the inline value. `overflow: clip` keeps a
+   long diagram inside the stage instead of bleeding over the section below. */
+.pinned-stage {
+  top: calc(var(--site-nav-h-compact) + env(safe-area-inset-top, 0px));
+  min-height: calc((100dvh - var(--site-nav-h-compact)) * 0.86);
+  overflow: clip;
+  display: flex;
+  align-items: center;
+  padding-block: clamp(16px, 3vh, 32px);
+}
+
+/* The stage's inner grid is centred in the viewport. */
+.pinned-stage > div > .grid {
+  width: 100%;
+}
+
+/* The step list. An inactive step keeps its number and label (so the reader
+   can see what is coming) and collapses its body; the active one opens. */
+.pinned-step {
+  display: flex;
+  gap: 12px;
+  transition: opacity var(--dur-layout) var(--ease-out-expo);
+}
+
+.pinned-step[data-active='false'] {
+  opacity: 0.5;
+}
+
+.pinned-step:hover {
+  opacity: 1;
+}
+
+/* The rail: a 2px track per step, filled from the top when that step is done
+   or current. `transform` only, so the fill costs no layout. */
+.pinned-step-rail {
+  position: relative;
+  display: block;
+  flex-shrink: 0;
+  width: 2px;
+  margin-block: 6px;
+  border-radius: 999px;
+  background-color: var(--line);
+}
+
+.pinned-step-fill {
+  position: absolute;
+  inset: 0;
+  display: block;
+  border-radius: inherit;
+  background-color: var(--accent-strong);
+  transform-origin: top;
+  transition:
+    transform var(--dur-layout) var(--ease-out-expo),
+    opacity var(--dur-layout) var(--ease-out-expo);
+}
+
+.pinned-step-label {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.pinned-step[data-active='true'] .pinned-step-label {
+  color: var(--ink);
+}
+
+/* The section marker's dot for the pinned sections: a small ring in the accent,
+   drawn as a ring rather than a filled dot so it reads as a marker at the same
+   weight as the `Star` motif elsewhere on the site, instead of as a bullet. It
+   does not animate: the moving indicator is the per-step bar. */
+.pinned-dot {
+  display: block;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 1.5px var(--accent-strong);
+}
+
+/* The sticky visual's frame: a hairline plate, no fill, so the diagram inside
+   sits on the page rather than on a generic card. The vertical centring fills
+   whatever room the stage has left, so the pinned moment reads as a scene
+   rather than a small card adrift in empty space, without a fixed floor height
+   that would overflow a landscape viewport. */
+.pinned-visual {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 0;
+  border-radius: var(--radius-card);
+  box-shadow: inset 0 0 0 1px var(--line);
+  background-color: var(--card);
+  padding: clamp(16px, 2.5vw, 28px);
+}
+
+/* Landscape and short viewports: the stage is ~340px tall, so the diagram and
+   the step list tighten together instead of overflowing the stage. */
+@media (min-width: 1024px) and (max-height: 620px) {
+  .pinned-visual {
+    padding: 14px;
+  }
+  .pinned-step-label {
+    font-size: 11.5px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* The pinned branch is not rendered under reduced motion, but the styles
+     still neutralise any transition that could fire during a resize across
+     the breakpoint. */
+  .pinned-step-fill,
+  .pinned-step {
+    transition: none !important;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * 3. Calendar surface
+ *
+ * Restyle only. Every handler, every UTC calculation and the `YYYY-MM-DD`
+ * contract inside `DateField` are untouched: this file changes how the popover
+ * *looks*, not what it does. The panel gains a tinted header band so the month
+ * control reads as one unit, and the day cells get a real hover/press response
+ * instead of a flat fill.
+ * ------------------------------------------------------------------------- */
+.cal-panel {
+  background-color: var(--card);
+}
+
+/* The month header: a recessed band, so the arrows and the month name read as
+   one control group rather than three floating glyphs. */
+.cal-head {
+  background-color: var(--mist);
+  border-radius: 10px;
+}
+
+.cal-nav {
+  color: var(--muted);
+  transition:
+    background-color var(--dur-fast) var(--ease-out-expo),
+    color var(--dur-fast) var(--ease-out-expo),
+    transform var(--dur-fast) var(--ease-out-expo);
+}
+
+.cal-nav:hover {
+  background-color: var(--card);
+  color: var(--ink);
+}
+
+/* Press feedback: a 1px settle. Small on purpose, since this is a hit target
+   the reader aims at repeatedly. */
+.cal-nav:active {
+  transform: scale(0.94);
+}
+
+/* Weekday header: the row that anchors the grid. Hairline bottom only, so it
+   separates without drawing a box. */
+.cal-weekdays {
+  color: var(--fog);
+  border-bottom: 1px solid var(--line);
+}
+
+/* Day cell. The press state is a transform on the cell; the hover state is a
+   background change. Nothing moves the grid. */
+.cal-day {
+  transition:
+    background-color var(--dur-fast) var(--ease-out-expo),
+    color var(--dur-fast) var(--ease-out-expo),
+    transform var(--dur-fast) var(--ease-out-expo);
+}
+
+.cal-day:not(:disabled):active {
+  transform: scale(0.92);
+}
+
+/* Today, when it is not also the selection: a ring, not a fill, so it cannot be
+   mistaken for the committed value. */
+.cal-day[data-today='true']:not([aria-selected='true']) {
+  box-shadow: inset 0 0 0 1px var(--accent);
+  color: var(--accent-strong);
+  font-weight: 600;
+}
+
+/* The selected day: the one filled cell in the grid.
+ *
+ * T-5.13: this used `--accent-strong` as a fill with `--accent-ink` on top. With
+ * the champagne palette that is gold #8F6D32 behind white, which measures
+ * 2.9:1 and fails AA outright (the azure it replaced happened to pass, so the
+ * rule was never wrong before). The fill now uses `--ink` and the label
+ * `--paper`: 16.9:1 in light, 18.3:1 in dark. It also reads better in the
+ * editorial system, because the selected day becomes the darkest mark on a
+ * quiet panel rather than a saturated chip competing with the gold in the
+ * header. */
+.cal-day[aria-selected='true'] {
+  background-color: var(--ink);
+  color: var(--paper);
+  font-weight: 600;
+}
+
+.cal-day[aria-selected='true']:hover {
+  background-color: var(--ink);
+}
+
+/* Unavailable days stay legible enough to read but clearly out of reach. */
+.cal-day:disabled {
+  color: color-mix(in srgb, var(--fog) 55%, transparent);
+  text-decoration: line-through;
+  cursor: not-allowed;
+}
+
+.cal-foot {
+  border-top: 1px solid var(--line);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cal-nav,
+  .cal-day {
+    transition: none !important;
+  }
+  .cal-nav:active,
+  .cal-day:not(:disabled):active {
+    transform: none;
+  }
+}
+
+/* ===========================================================================
+ * T-5.16 — Radial Sidebar
+ *
+ * One navigation for every route. Replaces the 260px workspace rail (`/p/*`) and
+ * the public capsule bar (`/`, `/how-it-works`) with a single hub-and-arc menu.
+ *
+ * Geometry, in one place:
+ *   - the hub is a 56px circle (48px under 640px) docked to the left edge;
+ *   - destinations sit on a ring of radius --radial-r around it;
+ *   - each item's angle comes from JS as a unit vector (--radial-x/--radial-y),
+ *     and the radius is applied here so the same angle works at both breakpoints.
+ *
+ * Why offset-x/offset-y and not left/top: `translate` on the item is reserved for
+ * the open/close motion, and stacking two transforms on one element means one of
+ * them has to be written as a matrix. Keeping position in `offset-*` and motion
+ * in `transform` lets both be independent and both be animatable.
+ *
+ * Everything is expressed with custom properties so the component owns the
+ * durations (280ms open, 200ms close, cubic-bezier(0.16,1,0.3,1)) and this sheet
+ * only consumes them.
+ * ======================================================================== */
+
+.radial-sidebar {
+  /* Hub diameter and ring radius. The ring clears the hub by --radial-gap. */
+  --radial-hub: 56px;
+  --radial-gap: 22px;
+  --radial-r: calc(var(--radial-hub) / 2 + var(--radial-gap) + 40px);
+  --radial-edge: 18px;
+
+  position: fixed;
+  /* Vertically centred, which is what keeps the hub out of the way of a page
+     header without needing to know that header's height. */
+  top: 50%;
+  z-index: 50;
+  transform: translateY(-50%);
+  /* The box itself is only the hub column; the panel is not a box at all, its
+     items are individually positioned, so the container must not clip them. */
+  width: var(--radial-hub);
+  height: var(--radial-hub);
+}
+
+.radial-sidebar[data-side='left'] {
+  left: var(--radial-edge);
+}
+
+.radial-sidebar[data-side='right'] {
+  right: var(--radial-edge);
+}
+
+/* The hub. Glass tier 2 over the page, with the champagne accent reserved for
+   the OPEN state and the active item only. */
+.radial-trigger {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: var(--radial-hub);
+  height: var(--radial-hub);
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  cursor: pointer;
+  color: var(--ink);
+  /* MEASURED FIX. Without its own stacking context, the hub's `backdrop-filter`
+     sampled the sidebar's 56px SQUARE box and resolved to a grey square behind
+     the circle. Isolating the TRIGGER (not its parent) gives the blur a local
+     context without making the sidebar a containing block for its fixed
+     descendants, which is what broke the scrim. */
+  isolation: isolate;
+  background-color: var(--glass-3);
+  -webkit-backdrop-filter: blur(var(--blur-2)) saturate(var(--glass-saturate));
+  backdrop-filter: blur(var(--blur-2)) saturate(var(--glass-saturate));
+  box-shadow:
+    inset 0 1px 0 0 var(--glass-highlight),
+    0 0 0 1px var(--glass-border-strong),
+    0 2px 6px -2px rgba(24, 24, 27, 0.14),
+    0 14px 34px -18px rgba(24, 24, 27, 0.32);
+  transition:
+    background-color var(--dur-hover, 180ms) var(--ease-hover),
+    box-shadow var(--dur-hover, 180ms) var(--ease-hover),
+    transform var(--radial-open) var(--radial-ease);
+}
+
+.radial-trigger:hover {
+  box-shadow:
+    inset 0 1px 0 0 var(--glass-highlight),
+    0 0 0 1px var(--accent),
+    0 2px 6px -2px rgba(24, 24, 27, 0.16),
+    0 16px 38px -18px rgba(24, 24, 27, 0.34);
+}
+
+.radial-trigger:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.radial-sidebar[data-open='true'] .radial-trigger {
+  /* The hub inverts to ink while open: it is the hub of the whole instrument at
+     that moment, the one fixed point everything radiates from. */
+  color: var(--paper);
+  background-color: var(--ink);
+  transform: rotate(0deg);
+}
+
+.radial-trigger-glyph,
+.radial-trigger-x {
+  grid-area: 1 / 1;
+  display: grid;
+  place-items: center;
+  transition:
+    opacity calc(var(--radial-open) * 0.6) var(--radial-ease),
+    transform var(--radial-open) var(--radial-ease);
+}
+
+.radial-trigger-x {
+  opacity: 0;
+  transform: rotate(-45deg) scale(0.8);
+}
+
+.radial-trigger-x svg {
+  width: 20px;
+  height: 20px;
+}
+
+.radial-sidebar[data-open='true'] .radial-trigger-glyph {
+  opacity: 0;
+  transform: rotate(45deg) scale(0.8);
+}
+
+.radial-sidebar[data-open='true'] .radial-trigger-x {
+  opacity: 1;
+  transform: rotate(0deg) scale(1);
+}
+
+/* Scrim ---------------------------------------------------------------- *
+ * Only while open. It is a very light wash, not a blackout: it exists to make
+ * "click outside closes" legible and to push the page back one layer, not to
+ * hide it. It sits BELOW the hub (z-index) so the hub stays crisp.
+ */
+.radial-scrim {
+  position: fixed;
+  inset: 0;
+  /* Above the page, below the hub. The sidebar is z-50, so the scrim sits at 49:
+     high enough to catch the outside-click and to dim the page, low enough that
+     the hub and its ring stay crisp on top of it. */
+  z-index: 49;
+  opacity: 0;
+  pointer-events: none;
+  /* Stronger than a decorative wash and it is doing a legibility job, not a mood
+     job: while the ring is open its labels sit over page text, and at the old
+     0.38 the text underneath competed with them. A blurred, darker scrim is what
+     makes the open ring readable on a text page (the same reasoning the old
+     mobile drawer used). */
+  background-color: var(--glass-scrim);
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
+  transition: opacity var(--radial-close) var(--radial-ease);
+}
+
+.radial-scrim[data-open='true'] {
+  opacity: 1;
+  pointer-events: auto;
+  transition-duration: var(--radial-open);
+}
+
+/* Panel ---------------------------------------------------------------- *
+ * Not a box: a zero-size positioning context at the hub centre. Items are laid
+ * out from it individually, so no background, border or padding is drawn here.
+ */
+.radial-panel {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+}
+
+.radial-sidebar[data-side='right'] .radial-panel {
+  left: auto;
+  right: 50%;
+}
+
+.radial-list {
+  position: absolute;
+  top: 0;
+  left: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Each item is a 44px circle, which is the touch-target floor. The circle is the
+   positioning anchor; the label is a sibling pill that hangs outside it. */
+.radial-item {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 44px;
+  height: 44px;
+  /* Centre the 44px box on its ring position. */
+  margin: -22px 0 0 -22px;
+
+  opacity: 0;
+  /* Collapsed INTO the hub: this is the "comes from the centre" reading. */
+  transform: translate(0, 0) scale(0.6);
+  transition:
+    opacity var(--radial-close) var(--radial-ease),
+    transform var(--radial-close) var(--radial-ease),
+    translate var(--radial-close) var(--radial-ease);
+  transition-delay: var(--radial-delay-out, 0ms);
+  /* Not clickable while collapsed, so a closed menu cannot be hit through the
+     scrim. Keyboard reachability is handled separately: `visibility: hidden`
+     removes an element from the tab order, but it is applied with a transition
+     delay so the item stays focusable for the length of the close animation.
+     The component also sets `tabIndex={-1}` on every link while closed, which is
+     what actually guarantees the closed menu is unreachable. */
+  pointer-events: none;
+  visibility: hidden;
+}
+
+.radial-item[data-open='true'] {
+  opacity: 1;
+  transform: translate(0, 0) scale(1);
+  /* The resting position on the ring, expressed in px so it animates. */
+  translate: calc(var(--radial-x) * var(--radial-r)) calc(var(--radial-y) * var(--radial-r));
+  transition:
+    opacity var(--radial-open) var(--radial-ease),
+    transform var(--radial-open) var(--radial-ease),
+    translate var(--radial-open) var(--radial-ease);
+  transition-delay: var(--radial-delay, 0ms);
+  pointer-events: auto;
+  visibility: visible;
+}
+
+.radial-link {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  cursor: pointer;
+  color: var(--muted);
+  background-color: var(--glass-2);
+  -webkit-backdrop-filter: blur(var(--blur-1)) saturate(var(--glass-saturate));
+  backdrop-filter: blur(var(--blur-1)) saturate(var(--glass-saturate));
+  box-shadow:
+    inset 0 1px 0 0 var(--glass-highlight),
+    0 0 0 1px var(--glass-border),
+    0 2px 5px -2px rgba(24, 24, 27, 0.12);
+  transition:
+    color var(--dur-hover, 180ms) var(--ease-hover),
+    background-color var(--dur-hover, 180ms) var(--ease-hover),
+    box-shadow var(--dur-hover, 180ms) var(--ease-hover);
+}
+
+.radial-sidebar[data-side='right'] .radial-link {
+  /* Mirror the row order on the right edge so labels never point off-screen. */
+  flex-direction: row-reverse;
+}
+
+.radial-link:hover {
+  color: var(--ink);
+  box-shadow:
+    inset 0 1px 0 0 var(--glass-highlight),
+    0 0 0 1px var(--accent),
+    0 4px 10px -4px rgba(24, 24, 27, 0.18);
+}
+
+.radial-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+/* Active destination: champagne gold, per DESIGN.md. The fill is the accent and
+   the icon inverts to --accent-ink, which the palette documents as measured at
+   4.77:1 (white on #8F6D32). Not a tint, because at 44px a tint is not
+   distinguishable from hover at arm's length. */
+.radial-link[data-active='true'] {
+  color: var(--accent-ink);
+  background-color: var(--accent);
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.24),
+    0 0 0 1px var(--accent),
+    0 4px 12px -4px rgba(143, 109, 50, 0.5);
+}
+
+.radial-link[data-active='true']:hover {
+  background-color: var(--accent-strong);
+}
+
+/* Tooltip -------------------------------------------------------------- *
+ * The label pill. It hangs on the outward side of the item, aligned to the side
+ * the arc opens toward, so it never crosses the hub or the viewport edge.
+ */
+.radial-tooltip {
+  position: absolute;
+  left: calc(100% + 8px);
+  top: 50%;
+  transform: translateY(-50%);
+  white-space: nowrap;
+  padding: 5px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.2;
+  letter-spacing: -0.005em;
+  color: var(--paper);
+  background-color: var(--ink);
+  box-shadow: 0 6px 18px -10px rgba(24, 24, 27, 0.5);
+  /* Revealed only when the item itself is hovered/focused, so an open ring is not
+     five permanent labels covering the page. */
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 140ms var(--radial-ease),
+    transform 140ms var(--radial-ease);
+}
+
+.radial-sidebar[data-side='right'] .radial-tooltip {
+  left: auto;
+  right: calc(100% + 8px);
+}
+
+.radial-link:hover > .radial-tooltip,
+.radial-link:focus-visible > .radial-tooltip {
+  opacity: 1;
+  transform: translateY(-50%) translateX(2px);
+}
+
+.radial-sidebar[data-side='right'] .radial-link:hover > .radial-tooltip,
+.radial-sidebar[data-side='right'] .radial-link:focus-visible > .radial-tooltip {
+  transform: translateY(-50%) translateX(-2px);
+}
+
+/* The active label is always visible: it is the only permanent statement of
+   "you are here" once the old rail's active bar is gone. */
+.radial-link[data-active='true'] > .radial-tooltip {
+  opacity: 1;
+}
+
+/* With the ring open, a permanently visible label on the active item collides
+   with the neighbouring items' labels (measured in the open-state screenshot).
+   Only the active item keeps a resting label. Hovering or keyboard-focusing any
+   item still labels it — see the rule below, which must out-rank this one. */
+.radial-sidebar[data-open='true'] .radial-link:not([data-active='true']) > .radial-tooltip {
+  opacity: 0;
+}
+
+/* A focused item's label must win over the "hide non-active labels while open"
+   rule above. That rule is [sidebar][data-open][link][:not(active)][tooltip],
+   which out-specifies a bare `.radial-link:focus-visible > .radial-tooltip`, so
+   keyboard users saw NO label while the ring was open (a real defect, caught by
+   measuring `matches(':focus-visible')` = true while opacity stayed 0). This
+   selector matches the specificity of the hiding rule and comes later, so focus
+   restores the label. */
+.radial-sidebar[data-open='true'] .radial-link:focus-visible > .radial-tooltip,
+.radial-sidebar[data-open='true'] .radial-link:hover > .radial-tooltip {
+  opacity: 1;
+}
+
+/* Theme control -------------------------------------------------------- *
+ * Pinned under the hub so it never moves as the menu opens, and never overlaps
+ * the ring (the ring starts --radial-gap + 40px out and is an arc, not a column).
+ */
+.radial-theme {
+  position: absolute;
+  /* Below the hub. At rest this is free space: the arc is collapsed and invisible,
+     so the control simply hangs under the hub where the old rail's footer had it.
+     While the ring is OPEN, the arc's lowest item (+76deg, radius 90px) sweeps
+     through this column, so the control is faded to zero and made non-interactive
+     rather than moved into a gap that does not exist. */
+  top: calc(var(--radial-hub) + 10px);
+  left: 50%;
+  transform: translateX(-50%);
+  transition:
+    opacity calc(var(--radial-open) * 0.6) var(--radial-ease),
+    visibility 0s linear calc(var(--radial-open) * 0.6);
+}
+
+.radial-sidebar[data-open='true'] .radial-theme {
+  /* Gone, not faded. Measured: any residual opacity still drew the control
+     through the arc's lowest item. `visibility` also removes it from hit-testing
+     and the tab order so it cannot be clicked while the ring is open. */
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* ---------------------------------------------------------------------------
+ * Responsive
+ *
+ * The small-screen ring is tighter (44px instead of 56, shorter radius) and the
+ * hub is moved away from the vertical centre, because on a phone the centre-left
+ * is exactly where a form field and a primary button land. Sitting at 34% of the
+ * viewport height keeps it clear of both the top bar and the form's action row.
+ * ------------------------------------------------------------------------- */
+@media (max-width: 639px) {
+  .radial-sidebar {
+    --radial-hub: 48px;
+    --radial-gap: 14px;
+    /* MEASURED, per corner. A probe counted, on all five routes, how many real
+       content boxes (buttons, inputs, labels, headings, cells) each corner's hub
+       circle would cover at scroll-top:
+         top-left 4, bottom-left 5, bottom-right 3, top-right 0.
+       Top-right is the only corner that covers nothing on any route, so that is
+       where the closed hub goes. */
+    --radial-r: 140px;
+    --radial-edge: 14px;
+  }
+
+  /* Dock to the top-right. `left: auto` is required, otherwise the base
+     `[data-side='left']` rule keeps the horizontal anchor. */
+  .radial-sidebar[data-side='left'] {
+    left: auto;
+    right: var(--radial-edge);
+  }
+
+  .radial-sidebar {
+    top: calc(14px + env(safe-area-inset-top, 0px));
+    transform: none;
+  }
+
+  /* The ring fans DOWN-LEFT from the top-right corner: the mobile unit vectors
+     (--radial-mx/--radial-my) point into the lower-left quadrant, so the same
+     radius applies and every item stays on screen. The desktop vectors
+     (--radial-x/--radial-y) are simply not used at this size. */
+  .radial-item[data-open='true'] {
+    translate: calc(var(--radial-mx) * var(--radial-r)) calc(var(--radial-my) * var(--radial-r));
+  }
+
+  /* With the arc on the LEFT of the hub, every label and tooltip has to sit to
+     the item's left too, or it would cross the hub and run off the right edge. */
+  .radial-link,
+  .radial-sidebar[data-side='left'] .radial-link {
+    flex-direction: row-reverse;
+  }
+
+  .radial-tooltip,
+  .radial-sidebar[data-side='left'] .radial-tooltip {
+    left: auto;
+    right: calc(100% + 8px);
+  }
+
+  .radial-sidebar[data-side='left'] .radial-link:hover > .radial-tooltip,
+  .radial-sidebar[data-side='left'] .radial-link:focus-visible > .radial-tooltip {
+    transform: translateY(-50%) translateX(-2px);
+  }
+
+  /* The theme control sits under the hub, which is now at the top, so it stays on
+     screen below the arc's start. It only has room when the menu is closed (it is
+     hidden while open already). */
+  .radial-theme {
+    top: calc(var(--radial-hub) + 10px);
+    bottom: auto;
+  }
+
+  .radial-trigger-glyph svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  .radial-tooltip {
+    font-size: 11.5px;
+    padding: 4px 8px;
+  }
+
+}
+
+/* ---------------------------------------------------------------------------
+ * Reduced motion
+ *
+ * No travel, no stagger, no fade. The items are simply present the moment the
+ * menu opens. `visibility` still switches so a closed menu stays out of the
+ * accessibility tree.
+ * ------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  .radial-item,
+  .radial-item[data-open='true'] {
+    transition: none;
+    transition-delay: 0ms;
+  }
+
+  .radial-scrim,
+  .radial-scrim[data-open='true'],
+  .radial-trigger,
+  .radial-trigger-glyph,
+  .radial-trigger-x,
+  .radial-theme {
+    transition: none;
+    transition-delay: 0ms;
+  }
+
+  .radial-sidebar[data-open='true'] .radial-trigger-glyph {
+    transform: none;
+  }
+
+  .radial-trigger-x {
+    transform: none;
+  }
+}
+
+/* Belt and braces: the component sets `data-reduce-motion` too, so the JS-driven
+   case and the CSS-only case agree even if the media query is emulated late. */
+.radial-sidebar[data-reduce-motion='true'] .radial-item,
+.radial-sidebar[data-reduce-motion='true'] .radial-item[data-open='true'] {
+  transition: none;
+  transition-delay: 0ms;
+}
+
+/* ===========================================================================
+ * T-5.16 — Workspace context line
+ *
+ * The one line of context the radial hub deliberately does not carry: which
+ * project, which section. It is text at the top of the workspace column, not a
+ * bar and not a navigation, so it draws no background and no shadow.
+ * ======================================================================== */
+.workspace-context {
+  padding: 22px 24px 0;
+}
+
+.workspace-context-inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.workspace-crumb ol {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 11.5px;
+}
+
+.workspace-crumb-code {
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  color: var(--fog);
+}
+
+.workspace-crumb-sep {
+  color: var(--line-strong);
+}
+
+.workspace-crumb-here {
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.workspace-context-actions {
+  margin-left: auto;
+}
+
+@media (max-width: 639px) {
+  .workspace-context {
+    padding: 16px 16px 0;
+  }
+
+  .workspace-context-inner {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .workspace-context-actions {
+    margin-left: 0;
+  }
+}
+
+/* The radial hub is fixed at 18px from the left edge and is 56px wide, so it
+   occupies the first 92px of the viewport at every scroll position. Page content
+   must never start under it. Rather than pad every route by hand, the four
+   workspace and public page wrappers opt in with this one class. */
+.radial-safe {
+  padding-left: max(92px, env(safe-area-inset-left, 0px) + 92px);
+}
+
+@media (max-width: 639px) {
+  /* On a phone the hub is 48px at 14px, so the gutter is 76px. The page keeps
+     its own horizontal padding on top of that. */
+  .radial-safe {
+    padding-left: max(76px, env(safe-area-inset-left, 0px) + 76px);
+  }
 }

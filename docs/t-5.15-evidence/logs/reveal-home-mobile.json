@@ -1,0 +1,67 @@
+{
+  "route": "/",
+  "reduced": false,
+  "viewport": [
+    390,
+    844
+  ],
+  "tracked": 16,
+  "animated": 12,
+  "static": 4,
+  "animatedDetail": [
+    {
+      "text": "Pembagi tugas kelompok",
+      "states": 45
+    },
+    {
+      "text": "Bagi tugas",
+      "states": 45
+    },
+    {
+      "text": "kelompok",
+      "states": 45
+    },
+    {
+      "text": "berdasarkan data,",
+      "states": 45
+    },
+    {
+      "text": "bukan tebakan.",
+      "states": 45
+    },
+    {
+      "text": "Masukkan anggota, skill,",
+      "states": 28
+    },
+    {
+      "text": "1Buat proyekMulai dari s",
+      "states": 2
+    },
+    {
+      "text": "Bobot skor0,40K + 0,30S ",
+      "states": 2
+    },
+    {
+      "text": "Komposisi skor",
+      "states": 2
+    },
+    {
+      "text": "Setiap rekomendasi bisa",
+      "states": 2
+    },
+    {
+      "text": "Anda periksa",
+      "states": 2
+    },
+    {
+      "text": "(empty)",
+      "states": 2
+    }
+  ],
+  "staticDetail": [
+    "01Daftarkan anggotaNama,",
+    "02Susun tugasPakai templ",
+    "03Analisis teksGemini me",
+    "04Sesuaikan hasilGeser b"
+  ]
+}

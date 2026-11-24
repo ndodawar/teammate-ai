@@ -1,0 +1,70 @@
+/* ============================================================================
+   Scroll Craft token bridge (T-5.17)
+   ----------------------------------------------------------------------------
+   The engine ships `scrollcraft.css`, which is the mechanism and is never
+   edited. What a project is supposed to do is override its tokens, six colours
+   and two fonts, so the mechanism inherits the brand instead of bringing its
+   own dark canvas and lime accent.
+
+   This file does exactly that and nothing else. Every value points at a token
+   that already exists in `app/globals.css`, so the two themes continue to work
+   and there is no second palette to keep in step. The engine's default tokens
+   are a near-black canvas with a `#d8ff3e` accent; not a single one of those
+   reaches the page.
+
+   Loaded AFTER `scrollcraft.css` and after `globals.css`, because all of these
+   are `:root` declarations and the last one wins.
+   ========================================================================== */
+
+:root {
+  /* --- colour roles ------------------------------------------------------
+     `--sc-canvas` is the ground the drift interpolates toward. Both themes
+     define it, so an act that drifts between sections stays inside the brand's
+     own light/dark pair rather than crossing into another palette. */
+  --sc-canvas: var(--canvas, #f6f4ef);
+  --sc-surface: var(--card, #ffffff);
+  --sc-ink: var(--ink, #141416);
+  --sc-ink-soft: var(--muted, #57575e);
+  --sc-accent: var(--accent, #8f6d32);
+  --sc-accent-ink: var(--accent-ink, #ffffff);
+
+  /* --- type --------------------------------------------------------------
+     Two families, both already loaded by `app/layout.tsx` through
+     `next/font`. Display carries voice (Inter Tight), text carries prose
+     (Inter). The mono face is the project's Geist Mono, used only for numbers
+     that get compared with other numbers. */
+  --sc-font-display: var(--font-inter-tight), 'Inter Tight', system-ui, sans-serif;
+  --sc-font-text: var(--font-inter), Inter, system-ui, sans-serif;
+  --sc-font-mono: var(--font-geist-mono), ui-monospace, monospace;
+
+  /* --- easing ------------------------------------------------------------
+     The skill's curve, which happens to be the project's own entrance curve.
+     Kept as its own name so the engine's devices and the product's motion
+     system move on one timing rather than two. */
+  --sc-ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+/* The engine's tokens are `:root` on light theme. Dark theme re-points the
+   product tokens on `html[data-theme='dark']`, and CSS custom properties are
+   resolved at use time, so the bridge above follows automatically. Nothing to
+   duplicate here. */
+
+/* ---------------------------------------------------------------------------
+ * Mechanism guard: the engine's own `[data-sc-in]` transition and our reduced
+ * motion contract.
+ *
+ * `scrollcraft.css` already floors everything correctly. The one thing worth
+ * adding is that a reader who asks for reduced motion must never be left with a
+ * stagger child that is `opacity: 0` because its IntersectionObserver has not
+ * fired yet. The engine animates those in on entry, so they are only hidden
+ * while off screen, which is correct. This rule simply removes the position
+ * change while keeping the fade, which is the skill's own rule ("fewer and
+ * gentler, not zero").
+ * ------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  [data-sc-in],
+  [data-sc-stagger] > * {
+    transform: none !important;
+    transition: opacity 200ms linear !important;
+  }
+}

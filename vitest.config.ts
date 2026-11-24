@@ -10,6 +10,11 @@ export default defineConfig({
   plugins: [react()],
   test: {
     environment: 'node',
+    // Phase-4 evaluation runners live under eval/ and are executed only through
+    // eval/vitest.eval.config.ts (see eval/README.md). Excluding them here keeps
+    // `npm test` measuring the product alone (287 tests); it does not loosen any
+    // product assertion.
+    exclude: ['node_modules/**', '.git/**', 'eval/**'],
   },
   resolve: {
     alias: {

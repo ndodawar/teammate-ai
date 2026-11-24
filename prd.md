@@ -144,11 +144,11 @@ Fokus utama adalah membantu menentukan siapa yang paling sesuai untuk mengerjaka
 
 ### Goal 1: Menghasilkan rekomendasi pembagian tugas
 
-Sistem harus mampu memberikan rekomendasi penanggung jawab untuk setiap pekerjaan berdasarkan data 2 sampai 4 anggota.
+Sistem harus mampu memberikan rekomendasi penanggung jawab untuk setiap pekerjaan berdasarkan data anggota yang tergabung dalam proyek.
 
 Target:
 - Mendukung minimal 2 anggota.
-- Mendukung maksimal 4 anggota.
+- Menerima seluruh anggota yang bergabung dengan kode proyek, tanpa batas maksimal.
 - Setiap tugas memiliki tepat satu penanggung jawab.
 - Rekomendasi dihasilkan dalam hitungan detik.
 
@@ -231,7 +231,7 @@ Seluruh angka berikut merupakan target pengujian, bukan klaim hasil yang sudah d
 MVP dinyatakan mencapai tujuan apabila pengguna dapat:
 
 1. Membuat proyek kelompok.
-2. Menambahkan 2 sampai 4 anggota.
+2. Menambahkan anggota kelompok.
 3. Mengisi profil keterampilan anggota.
 4. Memuat template 11 tugas atau membuat tugas sendiri.
 5. Menjalankan analisis tugas menggunakan Gemini.
@@ -369,15 +369,15 @@ Acceptance Criteria:
 
 ### US-03: Menambahkan anggota
 
-Sebagai ketua kelompok, saya ingin memiliki 2 sampai 4 anggota dalam proyek agar sistem dapat menghitung pembagian pekerjaan.
+Sebagai ketua kelompok, saya ingin menambahkan anggota ke dalam proyek agar sistem dapat menghitung pembagian pekerjaan.
 
 Acceptance Criteria:
 
-- Minimal 2 anggota.
-- Maksimal 4 anggota.
-- Anggota kelima harus ditolak.
+- Minimal 2 anggota agar rekomendasi dapat dijalankan.
+- Tidak ada batas maksimal anggota. Jumlah anggota mengikuti berapa banyak orang yang bergabung memakai kode proyek.
+- Anggota baru tidak pernah ditolak karena jumlah anggota sudah banyak.
 - Validasi dilakukan pada client dan server.
-- Setiap anggota memiliki identitas dalam proyek.
+- Setiap anggota tercatat sebagai satu baris tersendiri di dalam proyek.
 
 ### US-04: Mengisi profil anggota
 
@@ -599,7 +599,9 @@ Kode proyek harus memiliki panjang minimal 10 karakter.
 
 ### FR-02: Member Limit
 
-Sistem wajib membatasi jumlah anggota proyek menjadi 2 sampai 4 orang.
+Sistem wajib memvalidasi jumlah anggota proyek dengan batas minimal 2 orang.
+
+Jumlah anggota tidak dibatasi maksimal. Anggota bergabung menggunakan kode proyek, dan sistem menerima seluruh anggota yang masuk. Nama anggota tidak wajib unik; dua anggota boleh memakai nama panggilan yang sama.
 
 Validasi wajib dilakukan pada client dan server.
 
@@ -1163,7 +1165,7 @@ Tidak termasuk:
 Termasuk:
 
 - Menambahkan anggota.
-- Batas 2 sampai 4 anggota.
+- Minimal 2 anggota tanpa batas maksimal.
 - Profil skill.
 - Level kemampuan.
 - Minat.
@@ -1411,7 +1413,7 @@ Jika suatu pekerjaan membutuhkan perubahan di luar scope, jelaskan alasan dan mi
 MVP dianggap selesai ketika:
 
 - Pengguna dapat membuat proyek.
-- Proyek mendukung 2 sampai 4 anggota.
+- Proyek mendukung minimal 2 anggota tanpa batas maksimal.
 - Anggota dapat mengisi profil.
 - Pengguna dapat memuat 11 tugas template.
 - Pengguna dapat membuat tugas manual.

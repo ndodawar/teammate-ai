@@ -1,0 +1,26 @@
+{
+  "maxCalls": 3,
+  "results": [
+    {
+      "name": "3 panggilan pertama",
+      "status": "ok",
+      "detail": "callCount=3, remaining=0"
+    },
+    {
+      "name": "panggilan ke-4",
+      "status": "ok",
+      "detail": "CallBudgetExceededError=true, callCount tetap=3"
+    },
+    {
+      "name": "ringkasan run",
+      "status": "ok",
+      "detail": "calls=3, promptTokens=30, completion=15"
+    },
+    {
+      "name": "finish ganda",
+      "status": "ok",
+      "detail": "finish() kedua harus null"
+    }
+  ],
+  "note": "Angka \"panggilan\" adalah logika budget AiRun, bukan traffic API nyata (tanpa key)."
+}

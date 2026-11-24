@@ -1,0 +1,321 @@
+[
+  {
+    "rule": "R1",
+    "kind": "valid",
+    "name": "Anggota capacity 0 tidak menjadi kandidat meski skill tertinggi",
+    "pass": true,
+    "detail": "primary=m1 (harap m1)",
+    "idealLoad": 2,
+    "memberLoads": {
+      "m0": 0,
+      "m1": 4
+    },
+    "assignment": [
+      {
+        "taskId": "t1",
+        "primary": "m1",
+        "locked": false
+      }
+    ]
+  },
+  {
+    "rule": "R1",
+    "kind": "edge",
+    "name": "Semua anggota capacity 0 → tidak ada kandidat sah",
+    "pass": true,
+    "detail": "eligible m0=false, m1=false; engine tetap menugaskan primary=m0",
+    "idealLoad": 1.5,
+    "memberLoads": {
+      "m0": 3,
+      "m1": 0
+    },
+    "assignment": [
+      {
+        "taskId": "t1",
+        "primary": "m0",
+        "locked": false
+      }
+    ]
+  },
+  {
+    "rule": "R1",
+    "kind": "edge",
+    "name": "capacity negatif (di luar validasi) — perilaku engine",
+    "pass": true,
+    "detail": "checkR1(-5)=false; primary=m1",
+    "idealLoad": 1,
+    "memberLoads": {
+      "m0": 0,
+      "m1": 2
+    },
+    "assignment": [
+      {
+        "taskId": "t1",
+        "primary": "m1",
+        "locked": false
+      }
+    ]
+  },
+  {
+    "rule": "R2",
+    "kind": "valid",
+    "name": "Beban di bawah 1,25x ideal → lolos",
+    "pass": true,
+    "detail": "ideal=6, loads={\"m1\":6,\"m2\":6}",
+    "idealLoad": 6,
+    "memberLoads": {
+      "m1": 6,
+      "m2": 6
+    },
+    "assignment": [
+      {
+        "taskId": "t1",
+        "primary": "m1",
+        "locked": false
+      },
+      {
+        "taskId": "t2",
+        "primary": "m2",
+        "locked": false
+      }
+    ]
+  },
+  {
+    "rule": "R2",
+    "kind": "edge",
+    "name": "Tidak ada kandidat yang memenuhi R2 (kapasitas & 1,25x ideal)",
+    "pass": true,
+    "detail": "tidak ada eligible=true; engine tetap menugaskan primary=m1 (jalur absoluteBest, R2 dilanggar)",
+    "idealLoad": 5,
+    "memberLoads": {
+      "m1": 10,
+      "m2": 0
+    },
+    "assignment": [
+      {
+        "taskId": "t1",
+        "primary": "m1",
+        "locked": false
+      }
+    ]
+  },
+  {
+    "rule": "R2",
+    "kind": "edge",
+    "name": "Batas R2 berbasis capacity: anggota muat 1,25x ideal tapi tak muat capacity",
+    "pass": true,
+    "detail": "checkR2(LowCap,t1)=false (capacity 8 < 9); t1 primary=m2 (harap bukan m1)",
+    "idealLoad": 9,
+    "memberLoads": {
+      "m1": 0,
+      "m2": 18
+    },
+    "assignment": [
+      {
+        "taskId": "t1",
+        "primary": "m2",
+        "locked": false
+      },
+      {
+        "taskId": "t2",
+        "primary": "m2",
+        "locked": false
+      }
+    ]
+  },
+  {
+    "rule": "R3",
+    "kind": "valid",
+    "name": "Hanya anggota level>=3 pada skill wajib yang jadi kandidat",
+    "pass": true,
+    "detail": "ideal=4 max=5.00; m2 eligible=false (harap false karena level 2 < 3); t1 primary=m1",
+    "idealLoad": 4,
+    "memberLoads": {
+      "m1": 6,
+      "m2": 0,
+      "m3": 6
+    },
+    "assignment": [
+      {
+        "taskId": "t1",
+        "primary": "m1",
+        "locked": false
+      },
+      {
+        "taskId": "t2",
+        "primary": "m3",
+        "locked": false
+      },
+      {
+        "taskId": "t3",
+        "primary": "m3",
+        "locked": false
+      },
+      {
+        "taskId": "t4",
+        "primary": "m1",
+        "locked": false
+      }
+    ]
+  },
+  {
+    "rule": "R3",
+    "kind": "valid",
+    "name": "Multi-skill: cukup salah satu skill >=3 (any, bukan all)",
+    "pass": true,
+    "detail": "pool=[m1] (harap hanya m1)",
+    "idealLoad": 2.5,
+    "memberLoads": {
+      "m1": 5,
+      "m2": 0
+    },
+    "assignment": [
+      {
+        "taskId": "t1",
+        "primary": "m1",
+        "locked": false
+      }
+    ]
+  },
+  {
+    "rule": "R3",
+    "kind": "edge",
+    "name": "Tidak ada kandidat level>=3 → pool = semua anggota (peringatan)",
+    "pass": true,
+    "detail": "pool=2 (harap 2 = fallback); primary=m1",
+    "idealLoad": 2,
+    "memberLoads": {
+      "m1": 4,
+      "m2": 0
+    },
+    "assignment": [
+      {
+        "taskId": "t1",
+        "primary": "m1",
+        "locked": false
+      }
+    ]
+  },
+  {
+    "rule": "R3",
+    "kind": "edge",
+    "name": "Tugas tanpa skill wajib → semua kandidat (S=1.0)",
+    "pass": true,
+    "detail": "S=1 (harap 1.0 untuk tanpa skill)",
+    "idealLoad": 2,
+    "memberLoads": {
+      "m1": 2
+    },
+    "assignment": [
+      {
+        "taskId": "t1",
+        "primary": "m1",
+        "locked": false
+      }
+    ]
+  },
+  {
+    "rule": "R4",
+    "kind": "valid",
+    "name": "Setiap tugas punya tepat satu penanggung jawab",
+    "pass": true,
+    "detail": "oneEach=true, unique task=true, count=2",
+    "idealLoad": 4,
+    "memberLoads": {
+      "m1": 4,
+      "m2": 4
+    },
+    "assignment": [
+      {
+        "taskId": "t1",
+        "primary": "m1",
+        "locked": false
+      },
+      {
+        "taskId": "t2",
+        "primary": "m2",
+        "locked": false
+      }
+    ]
+  },
+  {
+    "rule": "R4",
+    "kind": "edge",
+    "name": "Tugas tidak ada pemilik sah (semua capacity 0) → primary bisa kosong/salah",
+    "pass": true,
+    "detail": "satu pemilik=m0; catat: R4 terpenuhi secara struktural walau R1 dilanggar",
+    "idealLoad": 4,
+    "memberLoads": {
+      "m0": 4
+    },
+    "assignment": [
+      {
+        "taskId": "t1",
+        "primary": "m0",
+        "locked": false
+      }
+    ]
+  },
+  {
+    "rule": "R5",
+    "kind": "valid",
+    "name": "Tugas terkunci mempertahankan pemilik setelah perhitungan ulang",
+    "pass": true,
+    "detail": "primary=m1 (harap m1 meski B level 5), locked=true",
+    "idealLoad": 3,
+    "memberLoads": {
+      "m1": 6,
+      "m2": 0
+    },
+    "assignment": [
+      {
+        "taskId": "t1",
+        "primary": "m1",
+        "locked": true
+      }
+    ]
+  },
+  {
+    "rule": "R5",
+    "kind": "edge",
+    "name": "Tugas terkunci ke anggota yang kemudian jadi tak layak — tetap dipertahankan",
+    "pass": true,
+    "detail": "primary=m1 (harap m1 terkunci meski tidak layak R3)",
+    "idealLoad": 2.5,
+    "memberLoads": {
+      "m1": 5,
+      "m2": 0
+    },
+    "assignment": [
+      {
+        "taskId": "t1",
+        "primary": "m1",
+        "locked": true
+      }
+    ]
+  },
+  {
+    "rule": "R5",
+    "kind": "edge",
+    "name": "Beban dari tugas terkunci ikut dihitung ke ideal & R2 anggota lain",
+    "pass": true,
+    "detail": "loads={\"m1\":18,\"m2\":6}; t2 hasil ke m2 (harap m2 karena m1 sudah 18)",
+    "idealLoad": 12,
+    "memberLoads": {
+      "m1": 18,
+      "m2": 6
+    },
+    "assignment": [
+      {
+        "taskId": "t1",
+        "primary": "m1",
+        "locked": true
+      },
+      {
+        "taskId": "t2",
+        "primary": "m2",
+        "locked": false
+      }
+    ]
+  }
+]

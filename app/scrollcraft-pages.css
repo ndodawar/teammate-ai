@@ -1,0 +1,762 @@
+/* ============================================================================
+   Scroll Craft compositions (T-5.17)
+   ----------------------------------------------------------------------------
+   Everything in this file is *composition*: the shapes the pages build with the
+   devices the engine drives. The engine (`app/scrollcraft-engine.css`) supplies
+   the mechanism (act geometry, `--sc-p`, cue windows, parallax writes, reveal
+   wipes, stagger entry); this file supplies the ground, the planes, the ledger
+   and the few section-level compositions that make the homepage and the
+   how-it-works page read as chapters instead of as a stack of bands.
+
+   Rules this file follows, and why:
+
+   1. **Colour and type come from tokens only.** `--canvas`, `--card`, `--ink`,
+      `--muted`, `--accent`, `--line`, `--k/--s/--c/--m`, `--font-*`. No literal
+      hex, no second palette. Light and dark theme therefore stay in step for
+      free, because the tokens are already re-pointed per theme.
+   2. **Nothing here hides content by default.** Every opacity or clip in this
+      file is either a *ground* (decoration, `aria-hidden`) or is driven by a
+      variable that starts at a fully-visible value. Content that is hidden
+      until the reader scrolls is the engine's job, through the documented cue
+      contract, and the engine has the fallbacks for reduced motion and for a
+      failed mount. A page-specific rule that parks copy at `opacity: 0` is
+      exactly how a section ends up unreadable when a script fails, so there
+      are none.
+   3. **Class names are not `sc-*`.** That prefix belongs to the engine's `@utility`
+      namespace in `app/globals.css`; a plain global rule here opt-ed in by a
+      class name could silently override `sc-copy`, `sc-wrap`, `sc-display` and
+      every other engine utility that shares the prefix. These are `home-*` and
+      `hiw-*` for that reason.
+   4. **Motion properties only.** Transform and opacity, plus `clip-path` where
+      a reveal is the point. No width, height, top or margin is animated, so no
+      scroll device on this page can move the layout under the reader.
+
+   Loaded after `scrollcraft-engine.css` and after the token bridge, so the
+   compositions can consume the bridge's `--sc-*` values alongside the
+   product's own tokens.
+   ========================================================================== */
+
+/* ---------------------------------------------------------------------------
+ * 1. Grade: what the engine calls the "world"
+ *
+ * The skill's own words: the page must not drift from near-black to cream
+ * mid-page, and the palette must sit inside one theme family. Teammate AI has
+ * exactly two families (bone/warm in light, near-black in dark) and never a
+ * third, so the "drift" stops are read straight from the tokens. In light mode
+ * all three stops are the same ground, which is correct: a bone page that
+ * subtly changes ground colour while you scroll reads cheaper than one that
+ * holds still and lets the planes do the work.
+ *
+ * In dark mode the three stops separate by a few percent, which is the whole
+ * effect the skill asks for: invisible frame to frame, obvious top to bottom.
+ * ------------------------------------------------------------------------- */
+.home-world,
+.hiw-world {
+  /* Act grounds. Light: one family, so all three resolve to the canvas. */
+  --world-open: var(--canvas);
+  --world-body: var(--canvas);
+  --world-close: var(--canvas);
+}
+
+:root[data-theme='dark'] .home-world,
+:root[data-theme='dark'] .hiw-world {
+  --world-open: var(--canvas);
+  --world-body: color-mix(in oklab, var(--canvas) 92%, #000);
+  --world-close: color-mix(in oklab, var(--canvas) 84%, #000);
+}
+
+/* The engine paints the interpolated ground on the document element. These
+   two lines only make sure the page's own background never fights it. */
+.home-world,
+.hiw-world {
+  background-color: var(--world-open);
+}
+
+/* ---------------------------------------------------------------------------
+ * 2. Layered hero: four planes at four rates
+ *
+ * The planes are the product's own material rather than photographs: a lit
+ * wash (back), a rule and a scale (mid), the marks that mean "a task in a
+ * column" (near), and a foreground flourish. That is a deliberate reading of
+ * `hero-depth.md`: it asks for a *spatial relationship*, not for a photo, and
+ * the section explicitly says a real product's own surfaces are the material
+ * when there is no photography. No generated imagery, no video, no paid asset,
+ * which is the task's constraint.
+ *
+ * Rates are in the engine's unit (hundreds of px across the act). The skill
+ * asks adjacent planes to differ by 10-30%, and the copy always rides at 1x.
+ * With copy at 0 the planes are -1.1 (back), -0.55 (mid), +0.28 (near) and
+ * +0.75 (front): a far plane that lags hard behind the hand, a mid plane that
+ * lags a little, and two planes in front of the text that overtake it, which
+ * is the "overtaking" move the reference hero is built on.
+ *
+ * `pointer-events: none` on every plane is load-bearing: the create-project
+ * form is inside this hero and a decoration that catches a pointer is a form
+ * the reader cannot fill in.
+ * ------------------------------------------------------------------------- */
+.home-hero {
+  position: relative;
+  isolation: isolate;
+}
+
+.home-planes {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  /* The planes clip at the section floor; this fade hides the clip line at
+     every scroll position instead of leaving a hard edge across the page. */
+  -webkit-mask-image: linear-gradient(180deg, #000 0, #000 72%, transparent 100%);
+  mask-image: linear-gradient(180deg, #000 0, #000 72%, transparent 100%);
+}
+
+.home-plane {
+  position: absolute;
+  /* A plane keeps its own width: the global `max-width: 100%` rule that most
+     reset sheets ship would shrink an absolutely positioned plane to the
+     viewport on a phone and the far plane would never show. */
+  max-width: none;
+  will-change: transform;
+  transition: opacity 600ms var(--sc-ease-out);
+}
+
+/* Back plane: the two washes the hero already carried, made one surface. The
+   opaque variant is generated from theme tokens, so it cannot drift out of
+   the theme family. */
+.home-plane--back {
+  inset: -8% -6% auto -6%;
+  height: 78%;
+  background:
+    radial-gradient(48rem 30rem at 22% 8%, var(--canvas-wash-a, transparent), transparent 68%),
+    radial-gradient(34rem 24rem at 84% 26%, var(--canvas-wash-b, transparent), transparent 72%);
+}
+
+/* Mid plane: a hairline grid, the visual language of the score matrix. It sits
+   behind the headline and only its inner third is visible, so it reads as a
+   surface the type sits on rather than as a chart. */
+.home-plane--mid {
+  inset: 6% 2% auto 40%;
+  height: 68%;
+  opacity: 0.5;
+  background-image:
+    linear-gradient(to right, var(--line) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--line) 1px, transparent 1px);
+  background-size: 88px 88px;
+  -webkit-mask-image: radial-gradient(120% 90% at 70% 10%, #000 0, transparent 72%);
+  mask-image: radial-gradient(120% 90% at 70% 10%, #000 0, transparent 72%);
+}
+
+/* Near plane: the four score letters, oversized and undecided, which is what
+   the reader is about to compute. Decoration only: it is `aria-hidden`, it is
+   the same four letters the page prints as text below, and it carries no
+   information the text does not already carry. */
+.home-plane--near {
+  inset: auto -2% 2% auto;
+  display: flex;
+  gap: 0.18em;
+  font-family: var(--sc-font-display);
+  font-size: clamp(6rem, 13vw, 12rem);
+  font-weight: 500;
+  line-height: 0.8;
+  letter-spacing: -0.06em;
+  user-select: none;
+}
+
+.home-plane--near span {
+  color: color-mix(in oklab, var(--ink) 7%, transparent);
+}
+
+.home-plane--near span:nth-child(1) { color: color-mix(in oklab, var(--k) 26%, transparent); }
+.home-plane--near span:nth-child(2) { color: color-mix(in oklab, var(--s) 26%, transparent); }
+.home-plane--near span:nth-child(3) { color: color-mix(in oklab, var(--c) 26%, transparent); }
+.home-plane--near span:nth-child(4) { color: color-mix(in oklab, var(--m) 26%, transparent); }
+
+/* Front plane: a single drawn rule that runs the width of the section and
+   travels further than the page, so it overtakes the headline as the reader
+   scrolls. This is the plane that sells the depth, because it is the only one
+   that crosses in front of the type. */
+.home-plane--front {
+  inset: auto 0 18% 0;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent 0,
+    var(--line-strong) 18%,
+    var(--accent) 62%,
+    transparent 100%
+  );
+  opacity: 0.55;
+}
+
+/* The copy rides at 1x. It is the highest layer, above every plane. */
+.home-hero-copy {
+  position: relative;
+  z-index: 2;
+}
+
+/* On a phone the composition is not this one shrunk. The grid plane and the
+   oversized letters are desktop scale decisions: at 390px the letters sit
+   under the form and the grid becomes noise behind 15px body copy. Only the
+   wash survives, so the phone hero is a lit surface with two foreground
+   rules, which is the mobile grammar the task asks for. */
+@media (max-width: 640px) {
+  .home-plane--mid,
+  .home-plane--near,
+  .home-plane--front {
+    display: none;
+  }
+
+  .home-plane--back {
+    height: 46%;
+    opacity: 0.85;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * 3. The weight ledger (the signature move)
+ *
+ * One act, four rows, a running total. The reader watches 0.40 arrive, then
+ * 0.70, then 0.90, then 1.00, and the four weights that the whole product
+ * rests on turn out to sum to exactly one. The number is the page's own real
+ * weight data, added in the page's own order; nothing is typed twice.
+ *
+ * The mechanism: the engine writes `--sc-p` (0 to 1) on the act element. Each
+ * row owns a window of that progress and a *running total* that is revealed by
+ * the same window, so the total cannot disagree with the rows. All of it is
+ * one CSS `calc()` per row; there is no per-frame JavaScript, no React state,
+ * and no second animation loop.
+ *
+ * The window shape matters more than the numbers. The first row's window opens
+ * at 0, because a pinned stage is fully visible for a whole viewport before
+ * its progress leaves 0: a ledger whose first row arrives at 0.15 shows an
+ * empty plate for a screen of scrolling, which is the "empty stage" trap
+ * `devices.md` documents. The last row closes at 1 and holds, because the act
+ * ends on the total, and a total that fades out is an argument that is
+ * withdrawn.
+ * ------------------------------------------------------------------------- */
+.home-ledger {
+  --ledger-row-h: clamp(3.4rem, 6.2vh, 4.6rem);
+}
+
+.home-ledger-plate {
+  position: relative;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The row transition is what makes the rows read as a *ledger* being written
+   rather than as four cards animating: the hairline above each row is drawn by
+   the same progress that fills the row, so the rule and the number arrive
+   together. */
+.home-ledger-row {
+  position: relative;
+  transition:
+    opacity 260ms linear,
+    filter 260ms linear;
+}
+
+/* Row toggling: the first row needs no reveal because it is the ground, the
+   remaining three are driven from the act progress. */
+.home-ledger-toggle {
+  --r: clamp(0, calc((var(--sc-p, 0) - var(--at, 0)) / 0.07), 1);
+  opacity: calc(0.34 + 0.66 * var(--r));
+}
+
+/* The bar grows from its real weight, scaled so the largest weight (40) fills
+   the track exactly once. `scaleX` on a fixed track keeps the layout identical
+   before and after, so the act cannot shift anything.
+
+   The division is INSIDE the `calc()`. Written outside it
+   (`calc(a - b) / 0.09`) the declaration is invalid and `transform` silently
+   computes to `none` — the bar looks correct at rest, which is why this is
+   worth a comment rather than a fix-up later. */
+.home-ledger-bar {
+  transform-origin: left center;
+  transform: scaleX(clamp(0, calc((var(--sc-p, 0) - var(--at, 0)) / 0.09), 1));
+}
+
+/* The per-row weight value: monospaced, tabular, and never rounded. This is the
+   one place on the page where the number itself is the content. */
+.home-ledger-weight {
+  font-family: var(--sc-font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The running total in the margin. It is the peak of the page: it starts at
+   zero and lands on exactly 1.00, in step with the last row. */
+.home-ledger-running {
+  font-family: var(--sc-font-display);
+  font-size: clamp(2.6rem, 7vw, 4.6rem);
+  font-weight: 500;
+  line-height: 0.9;
+  letter-spacing: -0.045em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The accumulating total (T-5.17).
+ *
+ * Four numerals are stacked in one grid cell and each one hands over to the
+ * next at its own row's window, so the reader sees 0,00 → 0,40 → 0,70 → 0,90 →
+ * 1,00 arrive in step with the rows rather than a single figure that is already
+ * finished. The last value holds, because a total that disappears is an
+ * argument withdrawn.
+ *
+ * Each numeral is a *pulse*, not a latch: it fades in at its own `--at` and
+ * fades back out at the next one. A latch would stack them — measured here,
+ * three totals sat at opacity 1 at the same moment and the reader saw an
+ * unreadable overprint. `--next` is the following window, set inline beside
+ * `--at`; the last numeral gets `--next: 2`, past the end of the act, so its
+ * outgoing ramp never opens.
+ *
+ * The stack is a grid overlay, not absolute positioning: every numeral occupies
+ * the same cell, so the widest one sets the box and the number never changes
+ * the layout as it counts up. `tabular-nums` on the parent keeps the digit
+ * widths equal, so nothing shifts between values either.
+ *
+ * Both ramps are narrow (0.05 of the act). A wide fade reads as two numbers
+ * dissolving into each other; a narrow one reads as a counter clicking over.
+ */
+.home-ledger-total {
+  opacity: calc(
+    clamp(0, calc((var(--sc-p, 0) - var(--at, 0)) / 0.05), 1) -
+      clamp(0, calc((var(--sc-p, 0) - var(--next, 2)) / 0.05), 1)
+  );
+}
+
+/* A safety net for a failed engine mount: if `--sc-p` never arrives it defaults
+   to 0, and the stack would sit at 0,00 with every total invisible. When the
+   engine has not marked the document, show the final total. */
+html:not(.sc-ready) .home-ledger-total {
+  opacity: 0;
+}
+
+html:not(.sc-ready) .home-ledger-total:last-child {
+  opacity: 1;
+}
+
+/* On a phone, and for a reader who asked for less motion, the act is not pinned
+   (see the media query below) so there is no progress to count with. The stack
+   collapses to the final total, which is the only honest thing to show: the
+   same number the arithmetic reaches, with no implied sequence the reader
+   cannot play. */
+@media (max-width: 1023px), (prefers-reduced-motion: reduce) {
+  .home-ledger-total {
+    opacity: 0;
+  }
+
+  .home-ledger-total:last-child {
+    opacity: 1;
+  }
+}
+
+/* A tick per row under the running total, so the reader can see four ticks
+   and know the ledger is finished rather than merely paused. */
+.home-ledger-tick {
+  transform-origin: bottom center;
+  transform: scaleY(clamp(0, calc((var(--sc-p, 0) - var(--at, 0)) / 0.06), 1));
+}
+
+/* The pin is a desktop composition. Below `lg` a 100svh sticky stage is too
+   short for a four-row ledger plus its heading, its total and the fallback
+   note, and clipping any of them is worse than losing the pin. The section
+   stays an ordinary document section: the same rows, the same numbers, the
+   same running totals, read top to bottom with no scroll choreography.
+
+   `prefers-reduced-motion` takes the same path for the same reason, and also
+   draws every geometric device (the scaleX bar, the tick) at its final value,
+   so the ledger is a complete statement that never needs a hand on the wheel.
+   One media query, deliberately: two would be how one of the two contracts
+   gets missed. */
+@media (max-width: 1023px), (prefers-reduced-motion: reduce) {
+  .home-ledger-act {
+    /* The engine sets the track height inline from `data-sc-span`; these two
+       rules take the act out of the pinned flow by overriding the geometry the
+       engine relies on. `height: auto !important` is required because the
+       engine writes the span height as an inline style on this element. */
+    height: auto !important;
+    min-height: 0;
+  }
+
+  .home-ledger-act .sc-stage {
+    position: static;
+    height: auto;
+    overflow: visible;
+  }
+
+  .home-ledger-toggle {
+    opacity: 1;
+  }
+
+  .home-ledger-bar,
+  .home-ledger-tick {
+    transform: none;
+  }
+}
+
+/* A device that survives a failed engine mount: if `--sc-p` never arrives it
+   defaults to 0 above, which would leave rows at 0.34 opacity. This rule is the
+   safety net: when the engine has not marked the document, the ledger is
+   simply complete. */
+html:not(.sc-ready) .home-ledger-toggle {
+  opacity: 1;
+}
+
+/* ---------------------------------------------------------------------------
+ * 4. Section hand-off
+ *
+ * Chaptered editorial wants a *cut* between chapters, not an interpolation.
+ * The engine's cue system handles the inside of each act; this handles the
+ * boundary: a hairline that draws itself across the seam, so the reader sees
+ * the page change chapter rather than merely stop scrolling for a moment.
+ * It is decoration and it is `aria-hidden`, so it can be one pixel tall.
+ * ------------------------------------------------------------------------- */
+.home-seam {
+  position: relative;
+  height: 1px;
+  background: var(--line);
+  overflow: hidden;
+}
+
+.home-seam-fill {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, var(--accent), transparent);
+  transform-origin: left center;
+  transform: scaleX(clamp(0, calc(var(--sc-p, 0) * 1.6), 1));
+}
+
+/* ---------------------------------------------------------------------------
+ * 5. How it works: four techniques, four sections
+ *
+ * The task requires a different technique per stage and forbids one animation
+ * for the whole page. The four therefore read as four different *kinds* of
+ * scroll response, not as four instances of the same fade:
+ *
+ *   A  member signup    sticky storytelling   (engine `pin`, cues advance)
+ *   B  task assembly    scroll reveal         (engine `reveal` wipe + stagger)
+ *   C  text analysis    layered visual        (engine `parallax`, three planes)
+ *   D  result adjustment progress transition  (engine `--sc-p` drives the rules)
+ *
+ * Each section owns its own CSS block below, so a change to one cannot leak
+ * into another.
+ * ------------------------------------------------------------------------- */
+
+/* A. Sticky storytelling. The stage is a plain row of four real steps; the
+   active one is brightened from the act's own progress, so the reader can
+   always see where they are in the sequence as well as which step the copy is
+   explaining. No animation replays on the way back up: the value is derived,
+   not triggered. */
+.hiw-step-row {
+  transition: opacity 220ms linear;
+  /* A *monotonic* ramp, not a bell.
+   *
+   * The first attempt brightened a row only near its own window and dimmed it
+   * again afterwards (a symmetric ramp pair), the way a "current item"
+   * indicator behaves. Measured in the browser, that read as wrong: at the
+   * midpoint of the pin every row was at 0.30 and none was legible, so the
+   * reader could not tell which steps had already happened. A progress list
+   * has to show its accumulated state, so this is cumulative instead — a step
+   * that has been passed stays at full opacity, the one arriving brightens
+   * across a short 0.04 window, and the ones still ahead stay at 0.30.
+   *
+   * It runs backwards correctly for free: scrolling up lowers `--sc-p`, and the
+   * same expression re-dims the rows in reverse order. Nothing is triggered, so
+   * nothing replays.
+   */
+  opacity: calc(0.3 + 0.7 * clamp(0, calc((var(--sc-p, 0) - var(--at, 0)) / 0.04), 1));
+}
+
+.hiw-step-row--active {
+  opacity: 1;
+}
+
+html:not(.sc-ready) .hiw-step-row {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hiw-step-row {
+    opacity: 1;
+  }
+}
+
+/* B. Scroll reveal. The wipe is the engine's; this is only the stage the wipe
+   runs on. A framed surface rather than a bordered box: the assembly sequence
+   in the middle is the thing being revealed, so the frame must not compete. */
+.hiw-assembly {
+  position: relative;
+  border-radius: var(--radius-card);
+  background-color: var(--card);
+  box-shadow: inset 0 0 0 1px var(--line);
+  overflow: hidden;
+}
+
+/* Each row in the pinned act's plate arrives on its own, one window after the one
+   above, so the column reads as stages being handed out rather than as a list
+   rendering.
+
+   Scoped to `.hiw-alur-act` on purpose. Stage B's list is revealed by the
+   engine's own `data-sc-stagger` wipe, and it shares the `.hiw-assembly` frame;
+   an unscoped rule here would drive the same rows from `--sc-p` as well, and two
+   devices writing an element's opacity is the definition of an unpredictable
+   one. The pin and the reveal are different families and must not both claim
+   the same node.
+
+   The plate holds four rows in a 100svh clip frame, so an unlit row is an empty
+   gap the reader can see. The 0.05 window and the early `--at` positions (set
+   inline on the markup) mean the plate fills down its length as the reader
+   scrolls instead of filling all at once when the pin releases. */
+.hiw-alur-act .hiw-assembly-item {
+  opacity: clamp(0, calc((var(--sc-p, 0) - var(--at, 0)) / 0.05), 1);
+  transform: translate3d(0, calc((1 - clamp(0, calc((var(--sc-p, 0) - var(--at, 0)) / 0.05), 1)) * 10px), 0);
+}
+
+html:not(.sc-ready) .hiw-alur-act .hiw-assembly-item {
+  opacity: 1;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hiw-alur-act .hiw-assembly-item {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* The pinned act's stage. The engine gives `.sc-stage` its sticky geometry and a
+   fixed 100svh height with `overflow: clip`, so everything in this stage has to
+   fit one viewport at the sizes where the pin runs. It carries padding from
+   `lg` up because the clip edge would otherwise cut the first and last rows.
+
+   Below `lg` and under reduced motion the pin is dropped entirely, for the same
+   reason as the ledger: a 100svh clip frame on a phone cannot hold a four-row
+   list beside its copy, and hiding rows is worse than losing the choreography.
+   The same rows then read as an ordinary document section. */
+.hiw-alur-act .hiw-alur-stage {
+  padding-block: 3rem;
+}
+
+/* Vertical centring for the pinned plate.
+ *
+ * A 100svh stage whose content is shorter than the viewport has to centre its
+ * content, or the reader sees the plate hang from the top with a band of empty
+ * page beneath it — which is what the first contact sheet showed.
+ *
+ * A one-cell grid is used rather than flex because `align-content: center` is
+ * exactly the request and it touches nothing else. (An earlier pass blamed
+ * `display: flex` here for the pin failing. That was wrong: re-measured in the
+ * browser, this stage computes `position: sticky` with `display` set to `grid`,
+ * `flex` and `block` alike. What looked like a CSS bug was a stale Turbopack
+ * bundle serving an older stylesheet — a trap worth remembering, not a
+ * constraint on this rule.) */
+.hiw-alur-act .hiw-alur-stage {
+  display: grid;
+  align-content: center;
+}
+
+@media (max-width: 1023px), (prefers-reduced-motion: reduce) {
+  .hiw-alur-act {
+    height: auto !important;
+  }
+
+  .hiw-alur-act .hiw-alur-stage {
+    position: static;
+    height: auto;
+    overflow: visible;
+    padding-block: 0;
+  }
+
+  .hiw-step-row,
+  .hiw-alur-act .hiw-assembly-item {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* C. Layered visual. Three planes at three rates: the task text (slowest), the
+   embedding field (the middle), and the four score components (fastest, in
+   front). The reading order is the DOM's; the depth is only visual. */
+.hiw-depth {
+  position: relative;
+  isolation: isolate;
+  min-height: clamp(16rem, 34vh, 22rem);
+}
+
+.hiw-depth .home-plane {
+  transition: none; /* per-frame writes must never be eased */
+}
+
+.hiw-depth-plane {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  will-change: transform;
+}
+
+/* The two decorative planes. They are `aria-hidden` in the markup and carry no
+   information: the back plane is a wash, the middle plane is a field of the four
+   component hues at very low opacity. The reading copy sits in a third,
+   non-parallaxed layer above both, because `devices.md` is explicit that text
+   being read must never move against the thing it is read against. */
+.hiw-depth-plane--back {
+  z-index: 0;
+}
+
+.hiw-depth-plane--mid {
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  padding: 2rem 0;
+  /* Confined to the right-hand half of the composition, matching the reading
+     layer's 12-column split (the copy takes 5). Without this the field of
+     component hues ran the full width and sat directly behind the quoted text,
+     which is exactly the "text against a busy ground" failure `devices.md`
+     warns about. */
+  left: auto;
+  width: min(100%, 34rem);
+  right: 0;
+}
+
+.hiw-depth-plane--mid span {
+  aspect-ratio: 1;
+}
+
+/* D. Progress-linked transition. The five hard rules are printed in reading
+   order; the *explanation* of each one is revealed as the reader passes it.
+   The rule text never hides, because a rule that is only legible at one scroll
+   position is a rule the reader can miss. Only the explanatory line and its
+   marker are gated. */
+/* The rule's explanation brightens as the reader passes that row, driven by the
+   act's own progress. */
+.hiw-rule-why {
+  opacity: clamp(0, calc((var(--sc-p, 0) - var(--at, 0)) / 0.06), 1);
+}
+
+/* The marker line draws left-to-right on the same progress signal. */
+.hiw-rule-mark {
+  transform-origin: left center;
+  transform: scaleX(clamp(0, calc((var(--sc-p, 0) - var(--at, 0)) / 0.06), 1));
+}
+
+/* A failed mount: `--sc-p` never arrives, so nothing may stay hidden. */
+html:not(.sc-ready) .hiw-rule-why {
+  opacity: 1;
+}
+
+html:not(.sc-ready) .hiw-rule-mark {
+  transform: none;
+}
+
+/* Below `lg` and under reduced motion this act is NOT pinned, so `--sc-p` stays
+   at 0 for the whole document and the ramps above never open: every explanation
+   from R4 onward stayed at opacity 0, which is the "element left behind at
+   opacity 0" failure the task forbids. Measured on a 390px phone — R4 and R5
+   printed their titles with an empty space beneath.
+ *
+ * Below `lg` the progress signal does not exist, so the effect is dropped and
+ * the copy is simply present. That is the honest degradation: the rule text is
+ * the content, and the draw-on is only ever an emphasis on top of it. */
+@media (max-width: 1023px), (prefers-reduced-motion: reduce) {
+  .hiw-rule-why,
+  .hiw-rule-mark {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * 6. Shared chrome: the active indicator
+ *
+ * The task asks for one consistent motion system across the shared components
+ * *without* making every component move identically. The rule applied here is
+ * the product's own: chrome responds to *state* with a drawn line or a colour
+ * shift in under 200ms; content responds to *scroll* with a reveal. The radial
+ * sidebar's active sector therefore uses a slightly longer, softer curve than
+ * a button's 120ms edge response, because it is a navigation state rather
+ * than a press.
+ * ------------------------------------------------------------------------- */
+.radial-item[data-active='true'] .radial-item-glyph {
+  transition:
+    color 240ms var(--sc-ease-out),
+    transform 240ms var(--sc-ease-out);
+}
+
+/* ---------------------------------------------------------------------------
+ * 7. Reduced motion, once, for everything above
+ *
+ * The engine already floors its own devices. This block floors the compositions
+ * that are driven from `--sc-p`, so a reader who asks for less motion gets the
+ * completed state of every picture rather than a half-drawn one. It is written
+ * as a single block on purpose: four scattered media queries is how one gets
+ * missed.
+ * ------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  .home-plane--front,
+  .hiw-depth-plane {
+    will-change: auto;
+  }
+}
+
+/* ===========================================================================
+ * 8. Cascade repair: the engine's reset vs. the product's colour utilities
+ * ---------------------------------------------------------------------------
+ * `scrollcraft.css` (the engine, never edited) ships a bare control reset near
+ * its own baseline:
+ *
+ *   button, input, select, textarea { font: inherit; color: inherit; }
+ *
+ * The stylesheet is imported *after* `globals.css`, and — this is the part that
+ * matters — that rule is UNLAYERED, while every Tailwind utility lives inside
+ * `@layer utilities`. Under the cascade-layers spec an unlayered declaration
+ * outranks *all* layered ones no matter how specific the layered selector is,
+ * so on every `<button>` the engine's `color: inherit` silently beat
+ * `.text-paper`.
+ *
+ * The measured consequence: a `variant="solid"` Button — `bg-ink text-paper` —
+ * computed `color: rgb(20,20,22)` on a `background: rgb(20,20,22)`. The label
+ * was the same colour as its own pill in BOTH themes, so "Analisis semua dengan
+ * AI" painted as a blank black pill, and the same held for every primary action
+ * built from this variant. A reader cannot press a button they cannot read.
+ *
+ * Two earlier attempts are worth recording because they fail for an instructive
+ * reason: re-declaring `.text-paper` inside `@layer utilities` (even in a file
+ * that loads later) changes nothing, because the losing factor is the *layer*,
+ * not the file order or the specificity. An `!important` in a layered rule also
+ * loses to an unlayered one in Chrome's implementation here.
+ *
+ * The only fix that does not touch the engine is to re-state these three
+ * utilities UNLAYERED, from this file, which is imported last. Being unlayered
+ * they sit in the same band as the engine's reset and win on specificity (class
+ * beats element), which restores exactly the behaviour Tailwind intends:
+ * `text-paper` on a solid button is paper text.
+ *
+ * Scope is deliberately narrow: the colour roles the design system actually
+ * puts on a `<button>` (see `VARIANTS` in `components/ui/primitives.tsx`).
+ * This is a repair for a specific upstream collision, not a second utility
+ * sheet — a full unlayered copy of `@layer utilities` would also undo the layer
+ * ordering the rest of the project relies on.
+ * ========================================================================= */
+.text-paper {
+  color: var(--paper);
+}
+.text-ink {
+  color: var(--ink);
+}
+.text-muted {
+  color: var(--muted);
+}
+/* The `accent` and `danger` variants. Without these the gold "Tambah tugas" /
+   "Buat proyek" buttons inherited `--ink` instead of `--accent-ink`, which in
+   the dark theme is near-white on gold — 1.4:1, invisible in practice. */
+.text-accent-ink {
+  color: var(--accent-ink);
+}
+.text-accent {
+  color: var(--accent);
+}
+.text-accent-strong {
+  color: var(--accent-strong);
+}
+.text-danger {
+  color: var(--danger);
+}
