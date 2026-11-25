@@ -105,4 +105,20 @@ export interface AssignmentWarning {
   taskId: string;
   memberId?: string;
   message: string;
+  /**
+   * `r2_no_candidate` only: the numbers behind the verdict, so the UI can state
+   * the cause without recomputing the rule.
+   *
+   * `exceedsCapAlone` separates two situations that used to look identical:
+   *  - true  -> this task's own effort is already above 1,25 x ideal load, so
+   *             no member could ever take it, no matter how free they are.
+   *  - false -> the task fits the cap, but every remaining candidate was
+   *             already carrying too much work.
+   */
+  detail?: {
+    taskHours: number;
+    idealLoad: number;
+    capHours: number;
+    exceedsCapAlone: boolean;
+  };
 }

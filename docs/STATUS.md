@@ -3086,3 +3086,530 @@ API, database, autentikasi, rumus skor, R1–R5, pipeline AI, mesin penugasan,
 kalender beserta validasinya, ekspor, what-if/lock/swap/undo, dan seluruh rute
 **tidak diubah**. Tidak ada `git reset`, `git clean`, commit, push, atau deploy.
 Tidak ada data yang dihapus. Tidak ada video atau aset berbayar.
+
+## Fase B.T-B.01 — Verifikasi Referensi Ilmiah (FASE B)
+
+Verifikasi ulang metadata 15 entri `docs/laporan/01_REFERENSI.md` terhadap sumber primer
+(Crossref REST API, halaman resmi penerbit, arXiv API, OpenLibrary, NeurIPS proceedings).
+Read-only terhadap referensi asli; tidak ada source code yang diubah.
+
+### Hasil
+
+| Status | Jumlah | Entri |
+|---|---|---|
+| VERIFIED | 13 | R3, R4, R5, R6, R7, R8, R9, R10, R11, R12, R13, R14 |
+| PARTIALLY VERIFIED | 2 | R1 (tahun 2010 vs 2011), R2 (tahun tidak ada di Crossref) |
+| UNVERIFIED | 0 | — |
+| INVALID | 0 | — |
+
+### Hitungan artikel ilmiah (bukan seluruh publikasi)
+
+- Artikel jurnal: **8** (R3, R4, R7, R8, R9, R10, R11, R14)
+- Artikel prosiding: **2** (R5, R6)
+- **Total artikel ilmiah: 10** — syarat minimum terpenuhi **tepat pada batas**
+- Bab buku: 2 (R1, R2) · Buku: 1 (R12) · Preprint: 1 (R15) — tidak dihitung artikel
+
+### Koreksi wajib
+
+1. **R5**: rentang halaman "3111–3119" tidak tercantum di metadata resmi NeurIPS dan tidak
+   dapat dibuktikan. Hapus rentang halaman, gunakan "(Vol. 26)".
+2. **Ringkasan `01_REFERENSI.md`**: frasa "14 artikel/bab/buku peer-reviewed" harus dibaca
+   sebagai total publikasi peer-reviewed, bukan jumlah artikel.
+3. **R1/R2**: tetapkan tahun (2011 untuk R1, 2007 untuk R2) secara konsisten.
+4. **R15**: preprint arXiv, tanggal submisi 19 Desember 2023, `journal_ref` kosong.
+
+### Kesenjangan topik
+
+- **Task Allocation / Workload Balancing** (topik inti proyek) belum punya rujukan langsung;
+  hanya bertumpu pada R11 (Hungarian method).
+- Cosine Similarity, MCDM, Weighted Scoring, dan evaluasi rekomendasi berbasis *constraint*
+  masing-masing hanya ditopang satu rujukan.
+
+Tidak ada referensi baru yang ditambahkan, sesuai aturan bahwa setiap sumber baru wajib
+melewati verifikasi primer.
+
+### Berkas
+
+- Dibuat: `docs/laporan/01_VERIFIKASI_REFERENSI.md`
+- Diubah: `docs/STATUS.md` (bagian ini, append-only)
+- Tidak diubah: `docs/laporan/01_REFERENSI.md`, source code, hasil evaluasi
+
+### Putusan
+
+**LULUS BERSYARAT.** Referensi cukup untuk menulis Bab 2 (10 artikel terverifikasi), tetapi
+rentang halaman R5 wajib dikoreksi lebih dahulu dan topik pembagian beban kerja masih perlu
+rujukan tambahan yang terverifikasi.
+
+## Fase B.T-B.02 — Penambahan Referensi Ilmiah (FASE B lanjutan)
+
+Menutup empat kesenjangan teori yang tercatat pada `01_VERIFIKASI_REFERENSI.md` §6:
+Task Allocation, Workload Balancing, Multi-Criteria Decision Making, dan evaluasi
+rekomendasi berbasis constraint serta fairness. Referensi lama tidak diubah, tidak diulang,
+tidak diganti.
+
+### Hasil
+
+| Status | Jumlah |
+|---|---|
+| VERIFIED | **6** (T1–T6) |
+| PARTIALLY VERIFIED | 0 |
+| UNVERIFIED | 0 |
+| Ditolak dengan alasan | 4 |
+
+### Referensi yang diterima
+
+| Kode | Referensi | Topik |
+|---|---|---|
+| T1 | Li, Shan, & Lin (2013), *Knowledge and Information Systems* 42(2), 441–463 | Task Allocation |
+| T2 | Lunin (2024), *IFAC-PapersOnLine* 58(19), 712–717 | Workload Balancing |
+| T3 | Behzadian dkk. (2012), *Expert Systems with Applications* 39(17), 13051–13069 | MCDM (TOPSIS survey) |
+| T4 | Opricovic & Tzeng (2004), *EJOR* 156(2), 445–455 | MCDM (VIKOR vs TOPSIS) |
+| T5 | Felfernig dkk. (2015), *Recommender Systems Handbook*, 161–190 | Constraint-Based Recommendation |
+| T6 | Wu dkk. (2022), *ACM TOIS* 41(2), 1–29 | Evaluasi RS (fairness) |
+
+Seluruh DOI di-resolve lewat `api.crossref.org` dan metadatanya dibaca balik: penulis, tahun,
+volume, nomor, halaman, jenis publikasi.
+
+### Perhitungan artikel setelah penambahan
+
+- Artikel jurnal: 8 menjadi **13** (tambah T1, T2, T3, T4, T6)
+- Artikel prosiding: 2 (tetap)
+- **Total artikel ilmiah: 10 menjadi 15** (syarat minimum 10 kini terpenuhi dengan margin 5)
+- Bab buku: 2 menjadi 3 (tambah T5) · Buku: 1 · Preprint: 1
+- Total publikasi: 15 menjadi 21
+
+### Temuan penting saat verifikasi
+
+Tiga dari lima DOI yang saya duga dari ingatan **menunjuk ke makalah yang berbeda**:
+
+- `10.1016/j.eswa.2011.08.128` ternyata milik Zhang & Chow (2012), bukan Behzadian dkk.
+- `10.1145/3298689.3347043` ternyata milik Huang dkk. (2019) "FiBiNET".
+- `10.1145/2959100.2959165` ternyata milik Kim dkk. (2016) tentang CMF.
+
+Semuanya dibuang dan diganti hanya setelah DOI yang benar ditemukan lewat pencarian lalu
+dibaca balik metadatanya. Satu DOI lain (`10.1145/3210109`) gagal resolve (HTTP 404).
+
+Batasan yang dicatat: abstrak T1 ditandai *elided by publisher*, sehingga relevansinya
+disandarkan pada TLDR Semantic Scholar dengan klaim yang dibatasi. Abstrak T3, T4, dan T5
+tidak tersedia penuh; klaim dibatasi pada judul, wadah, dan ringkasan yang ada.
+
+### Peringatan penggunaan
+
+TOPSIS dan VIKOR **tidak diimplementasikan** di proyek ini. T3 dan T4 hanya boleh dipakai
+sebagai pembanding teori pada pembahasan keterbatasan weighted scoring.
+
+### Berkas
+
+- Dibuat: `docs/laporan/02_REFERENSI_TAMBAHAN.md`
+- Diubah: `docs/STATUS.md` (bagian ini, append-only)
+- Tidak diubah: `01_REFERENSI.md`, `01_VERIFIKASI_REFERENSI.md`, source code, dataset, hasil evaluasi
+
+### Putusan
+
+**LULUS.** Landasan teori untuk Task Allocation dan Workload Balancing kini punya rujukan
+langsung. Kesenjangan yang masih terbuka: Cosine Similarity hanya bersandar pada R4 (1975),
+dan koreksi rentang halaman R5 belum dikerjakan karena di luar cakupan tugas ini.
+
+## Fase B.T-B.02.1, T-B.03, Audit, dan Laporan Final (MASTER-T-B.02-FINAL)
+
+Menyelesaikan pekerjaan dari posisi terakhir T-B.02 sampai laporan BAB I sampai III siap
+diperiksa. Tidak ada source code, konfigurasi, basis data, atau hasil evaluasi yang diubah.
+Tidak ada commit atau push. HEAD tetap `8ce6220`.
+
+### 1. T-B.02.1 Koreksi Metadata T1 dan T2
+
+| Item | Sebelum | Sesudah | Bukti |
+|---|---|---|---|
+| T1 tahun | 2013 | **2015** | Crossref `10.1007/s10115-013-0695-x`: `published-online` = 2013-10-06, **`published-print` = 2015-02**, volume 42 nomor 2 |
+| T2 jenis | Artikel jurnal | **Artikel prosiding** | Wadah `IFAC-PapersOnLine` 58(19) adalah prosiding konferensi IFAC. Crossref menandai `journal-article`, perbedaan dicatat terbuka |
+| T2 tahun | 2024 | 2024 (tidak berubah) | Crossref `issued` = 2024 |
+
+Format APA 7 T1 dan T2 diperbaiki. T3 sampai T6 dan referensi lama R1 sampai R15 tidak diubah,
+kecuali R5 yang menjadi cakupan T-B.03.
+
+### 2. T-B.03 Koreksi R5
+
+Rentang halaman `3111–3119` pada R5 **dihapus** dari `01_REFERENSI.md`.
+
+Bukti: halaman resmi NeurIPS
+`papers.nips.cc/paper_files/paper/2013/hash/9aa42b31882ec039965f3c4923ce901b-Abstract.html`
+diverifikasi ulang. Metadata memuat `citation_title`, lima `citation_author` (Mikolov,
+Sutskever, Chen, Corrado, Dean), `citation_journal_title`, `citation_volume=26`, dan
+`citation_publication_date=2013`. **Tidak ada** `citation_firstpage` maupun `citation_lastpage`,
+dan tidak ada satu pun kemunculan angka 3111 atau 3119 pada isi halaman. Entri kini berbunyi
+"Dalam *Advances in Neural Information Processing Systems* (Vol. 26)." tanpa nomor halaman.
+NeurIPS 2013 juga tidak memiliki DOI.
+
+### 3. Perhitungan Publikasi Final
+
+| Jenis | Sebelum (audit lama) | Tambahan T1–T6 | Total |
+|---|---|---|---|
+| Artikel jurnal | 8 | +4 (T1, T3, T4, T6) | **12** |
+| Artikel prosiding | 2 | +1 (T2) | **3** |
+| **Total artikel ilmiah** | **10** | **+5** | **15** |
+| Bab buku | 2 | +1 (T5) | **3** |
+| Buku | 1 | 0 | **1** |
+| Preprint / laporan teknis | 1 | 0 | **1** |
+| **Total entri publikasi** | 14 | +6 | **20** |
+
+Hasil ini sesuai target pengguna: 12 artikel jurnal, 3 artikel prosiding, 3 bab buku, 1 buku,
+1 preprint, 20 publikasi. Syarat minimum 10 artikel ilmiah terpenuhi dengan margin 5.
+
+Koreksi hitungan dari versi T-B.02 sebelumnya: sebelumnya dilaporkan 13 artikel jurnal dan 21
+entri. Angka itu keliru karena T2 dihitung sebagai artikel jurnal dan total lama (15) sudah
+mencampur preprint. Setelah T2 diklasifikasikan sebagai prosiding, artikel jurnal menjadi 12,
+dan total entri publikasi menjadi 20.
+
+Catatan terbuka: daftar pustaka pada laporan final memuat **13** artikel jurnal bila Behzadian
+dkk. (2012) dan Wu dkk. (2022) sama-sama dihitung. Selisih ini dicatat sebagai
+[PERLU KONFIRMASI] pada `04_LAPORAN_FINAL.md` Lampiran A, dan tidak diturunkan dengan membuang
+rujukan yang sah.
+
+### 4. Audit Bukti Implementasi dan Evaluasi
+
+Seluruh angka diverifikasi ulang terhadap artefak. **Semua angka yang diminta cocok.**
+
+| Kelompok | Sumber | Hasil |
+|---|---|---|
+| Empat metode | `eval/results/methods_summary.json` | hybrid/random/round-robin/manual: cakupan 0,8083 / 0,7539 / 0,8083 / 0,8667; simpangan baku 5,616 / 5,296 / 3,876 / 5,616; fit 0,645 / 0,585 / 0,674 / 0,668; R1 0 / 31 / 2 / 2; R2 24 / 752 / 18 / 24; R3 1 / 147 / 4 / 0; perubahan manual 1 / 178 / 6 / 2 |
+| Ablation | `eval/results/ablation.json` | 9 dari 35 tugas berganti pemilik (0,2571); coverageDelta 0; stdDevDelta -0,2018; fitDelta -0,0267; `liveAblation: BLOCKED` |
+| Kinerja | `eval/results/performance.json` | pipeline 20 skenario median 0,285 ms, p95 0,465 ms; slider median 0,005 ms |
+| Aturan keras | `eval/results/hard_rules.json` | 15 kasus, semua `pass: true` (R1:3, R2:3, R3:4, R4:2, R5:3) |
+| Dataset | `eval/results/dataset_summary.json` | D1 26 tugas; D2 20 skenario, 49 anggota, 35 tugas; D3 tidak ada |
+
+Temuan tambahan dari audit ini:
+
+- **Perbedaan angka kinerja.** `eval/reports/L_PERFORMANCE.md` (19 Nov 10:19) mencatat pipeline
+  median 0,332 ms dan p95 0,493 ms. `eval/results/performance.json` (19 Nov 13:19) mencatat
+  0,285 ms dan 0,465 ms. Laporan memakai angka JSON karena lebih baru, dan perbedaannya dicatat.
+- **Provider AI terpisah.** Groq untuk model teks (`analyze-task.ts`, `explain.ts`), Gemini untuk
+  embedding 768 dimensi (`EMBEDDING_DIMENSION = 768`). `lib/ai/groq.ts` menyatakan Groq tidak
+  menyediakan layanan embedding. Keduanya tidak dicampur dalam laporan.
+- **RLS aktif tetapi tidak membatasi.** Sembilan tabel memiliki `enable row level security`, tetapi
+  seluruh kebijakan berbunyi `USING (true) WITH CHECK (true)`. Keamanan bergantung pada lapisan
+  peladen, bukan pada RLS. Dicatat sebagai keterbatasan pada §2.3.4.
+- **Konflik R2 dan R5.** Kode menangani `r2_locked_overload`: tugas terkunci dipertahankan meskipun
+  beban melampaui batas, sesuai pengutamaan R5.
+- **Pengujian.** `npm test`: 29 berkas, **373 lulus / 4 gagal**. Empat kegagalan seluruhnya pada
+  `test/ai/gemini-models.live.test.ts` dan `test/ai/groq.live.test.ts`, yaitu pengujian layanan
+  live, bukan logika. Angka 373/4 sesuai baseline T-6.14.
+- **PRD v0.2 PDF ditemukan** di `/home/nando/Downloads/PRD_Pembagi_Tugas_Kelompok_AI_v0.2.pdf`,
+  memiliki 17 bagian. Bagian 14 memuat ketentuan format laporan yang dikutip laporan final.
+
+### 5. Laporan BAB I sampai III
+
+Dibuat: **`docs/laporan/04_LAPORAN_FINAL.md`** (sekitar 1.680 baris, 13.884 kata).
+
+| Bagian | Isi |
+|---|---|
+| Halaman awal | Halaman judul (identitas bertanda), kata pengantar (bertanda), daftar isi, daftar tabel (18), daftar gambar (5) |
+| BAB I | 1.1 Latar Belakang, 1.2 Rumusan Masalah (5 butir), 1.3 Tujuan (5 butir), 1.4 Manfaat dan Batasan |
+| BAB II | 2.1 Dasar Teori (6 sub), 2.2 Konsep AI (5 sub), 2.3 Arsitektur (6 sub), 2.4 Dataset (4 sub), 2.5 Implementasi (7 sub), 2.6 Pengujian (10 sub) |
+| BAB III | 3.1 Kesimpulan (7 butir), 3.2 Saran (3 kelompok) |
+| Daftar pustaka | 21 entri APA 7 |
+| Lampiran | A. Konsistensi sitasi, B. Daftar blocker, C. Ketentuan format PRD Bagian 14 |
+
+Pemeriksaan yang dijalankan dan hasilnya:
+
+| Pemeriksaan | Hasil |
+|---|---|
+| Tabel dideklarasikan vs caption di badan | 18 = 18, **tidak ada selisih** |
+| Gambar dideklarasikan vs penanda di badan | 5 = 5, **tidak ada selisih** |
+| Rujukan silang `§X.Y` | 79 rujukan, **0 menggantung** |
+| Sitasi dalam teks tanpa entri pustaka | **0** |
+| Entri pustaka tidak pernah dikutip | **0** (setelah Gemini Team (2024) ditambahkan sitasinya di §2.3.5) |
+| Em dash (R-02) | **0** |
+| Kata promosi (R-16) | **0** |
+| Angka vs artefak | seluruhnya cocok |
+
+### 6. Yang Tidak Dapat Diselesaikan (Blocker)
+
+| Hal | Status | Alasan |
+|---|---|---|
+| Identitas kelompok, dosen, kampus, tahun | `[TIDAK DITEMUKAN]` | Tidak ada berkas yang memuat |
+| Kesepakatan penilai manusia | **BLOCKED** | Belum ada 3 reviewer manusia |
+| Ablation embedding live | **BLOCKED** | Tanpa kunci API embedding |
+| Penerapan migrasi Supabase 001–007 | `[PERLU KONFIRMASI]` | Tidak ada bukti penerapan pada proyek nyata |
+| Pengujian pada lingkungan produksi | `[TIDAK DITEMUKAN]` | Tidak ada bukti |
+| Tangkapan layar dan diagram | `[GAMBAR PERLU DITAMBAHKAN]` | Tidak ada berkas gambar di repository |
+| Ekspor `.docx`/PDF sesuai format PRD §14 | **Belum** | Tidak ada pandoc, python-docx, maupun paket npm `docx` |
+
+### 7. Berkas yang Dibuat atau Diubah
+
+| Berkas | Tindakan |
+|---|---|
+| `docs/laporan/04_LAPORAN_FINAL.md` | **Dibuat** |
+| `docs/laporan/02_REFERENSI_TAMBAHAN.md` | Diubah: koreksi T1 (2015), T2 (prosiding), jumlah publikasi, catatan tahun dan jenis |
+| `docs/laporan/01_REFERENSI.md` | Diubah: R5 tanpa rentang halaman (T-B.03) |
+| `docs/laporan/01_VERIFIKASI_REFERENSI.md` | Diubah: status koreksi R5 ditandai sudah diterapkan |
+| `docs/STATUS.md` | Diubah: bagian ini (append-only) |
+
+Tidak diubah: source code, konfigurasi, `supabase/migrations/`, `eval/results/*`, `eval/reports/*`,
+`prd.md`, dokumen audit lama (`02_LAPORAN_AKADEMIK.md`, `03_HASIL_DAN_PEMBAHASAN.md`).
+
+### Putusan
+
+**SELESAI BERSYARAT.** Koreksi T-B.02.1 dan T-B.03 selesai. Audit referensi dan audit bukti
+selesai dengan seluruh angka cocok. Laporan BAB I sampai III tersedia sebagai satu dokumen
+dengan sitasi dan daftar pustaka yang konsisten. Syarat yang belum terpenuhi: identitas
+kelompok, gambar aktual, penilaian manusia, verifikasi penerapan Supabase, dan ekspor dokumen
+sesuai format PRD Bagian 14.
+
+---
+
+## T-3.XX: Perbaikan Matriks Rekomendasi dan Validasi Penugasan
+
+Tanggal kerja: sesi ini. PRD acuan: v0.3 (Bagian 8, 9, 11, 12). Rentang PRD di judul tiket
+menyebut "8.1–8.6"; dokumen `docs/PRD_v0.3.md` di repository hanya memakai penomoran bagian
+sampai tingkat FR dan tidak memuat subbagian 8.1–8.6 dengan label itu. Acuan yang benar-benar
+ada dan dipakai: FR-07 (formula skor), Hard Constraints R1–R5, dan Bagian 8.4 pada kalimat PRD
+(baris 720). Ketidaksesuaian penomoran ini dicatat, bukan ditebak.
+
+### 1. Kontradiksi PRD yang Dikonfirmasi Pemilik Produk
+
+PRD v0.2 membatasi kelompok 2 sampai 4 anggota. PRD v0.3 FR-02 (baris 646, 1528) menyatakan
+minimal 2 dan **tanpa batas maksimal**. Implementasi saat ini hanya memvalidasi minimal 2
+(`app/p/[code]/members/members-client.tsx:105`), konsisten dengan v0.3. Pemilik produk memilih
+**PRD v0.3 sebagai acuan**. Karena itu 5 anggota adalah input SAH: tidak ada perubahan validasi
+jumlah anggota, dan skenario 5 anggota diuji sebagai input valid, bukan sebagai input ditolak.
+
+### 2. Penyebab Masalah Awal (hasil audit, bukan dugaan)
+
+Skenario screenshot direproduksi persis dengan mesin sungguhan: 1 tugas 8 jam, 5 anggota,
+beban ideal 1,6 jam, batas R2 2 jam.
+
+| Gejala | Penyebab aktual | Lokasi |
+|---|---|---|
+| Semua anggota tampak "gugur" tanpa alasan jelas | Sel matriks hanya menulis satu kata "gugur" tanpa nama aturan penyebab | `result-client.tsx` (label sel) |
+| Tidak ada rekomendasi, tetapi tidak dijelaskan sebabnya | Mesin sudah benar membiarkan tugas tanpa pemilik (8 jam > batas 2 jam, pengecualian R4). UI hanya menampilkan badge pendek, tanpa menjelaskan bahwa estimasi tugas melebihi batas sehingga **tidak ada** anggota yang mungkin memenuhi R2 | `result-client.tsx` (badge peringatan) |
+| Batas R2 terlalu ketat bagi anggota yang masih punya ruang | Beban ideal dibagi jumlah **seluruh** anggota, termasuk anggota yang jam tersedianya 0 dan sudah dikeluarkan R1. Pembagi yang terlalu besar memperkecil beban ideal dan memperketat batas R2 bagi semua orang | `lib/scoring/assign.ts:36`, `lib/scoring/interaction.ts:170` |
+| Tugas terkunci masih bisa dipindah lewat interaksi | `assignOwner` tidak memeriksa `isLocked`; R5 hanya dijaga di `globalAssign`, tidak di jalur edit langsung | `lib/scoring/interaction.ts` (`assignOwner`) |
+| Angka 5 anggota dianggap masalah | 5 anggota sah menurut PRD v0.3, jadi bukan cacat | tidak ada perubahan |
+
+Screenshot lama menampilkan "GUGUR" karena pemotongan beban ideal salah pembagi: dengan
+pembagi seluruh anggota, tugas kedua yang sebenarnya masih muat ikut ditolak R2.
+
+### 3. Ringkasan Perbaikan
+
+1. **Beban ideal sadar R1** (`assign.ts`, `interaction.ts`): pembagi hanya anggota yang lolos
+   R1. Rumus, bobot 0,40/0,30/0,20/0,10, dan angka 1,25 **tidak diubah**.
+2. **Diagnosis R2 eksplisit** (`types.ts`, `assign.ts`): peringatan `r2_no_candidate` membawa
+   `detail` berisi `taskHours`, `idealLoad`, `capHours`, dan `exceedsCapAlone`, sehingga UI bisa
+   membedakan "tugas mustahil bagi siapa pun" dan "kandidat lain sedang penuh" tanpa menghitung
+   ulang aturan.
+3. **R5 ditegakkan di jalur interaktif** (`interaction.ts`): `assignOwner` menolak mengganti
+   pemilik tugas terkunci dan menyuruh membuka kunci dulu.
+4. **Status keputusan pada UI** (`result-client.tsx`): banner `assignment-status` menyatakan
+   kondisi A sampai F dari keluaran mesin (semua R1 keluar, R2 mustahil, R2 terblokir, R3
+   fallback, R5 overload, atau semua terpenuhi). Sel matriks kini menulis aturan penyebab
+   ("gugur R2"), bukan satu kata tanpa alasan, dan `aria-label` memuat alasan lengkap.
+5. **Satu definisi R1**: UI memakai `checkR1`, bukan `capacity <= 0` sendiri.
+6. **Kode mati dibuang**: `r1Pool` ganda tak terpakai di `assign.ts` dihapus (dilaporkan lint).
+
+### 4. Berkas yang Diubah
+
+| Berkas | Tindakan |
+|---|---|
+| `lib/scoring/assign.ts` | Diubah: pembagi beban ideal sadar R1, `detail` peringatan R2, hapus `r1Pool` mati |
+| `lib/scoring/interaction.ts` | Diubah: pembagi beban ideal sadar R1, R5 di `assignOwner` |
+| `lib/scoring/types.ts` | Diubah: field opsional `detail` pada `AssignmentWarning` |
+| `app/p/[code]/result/result-client.tsx` | Diubah: banner status keputusan, label sel menyebut aturan, `aria-label` beralasan, pakai `checkR1` |
+| `test/scoring/matrix_recommendation.test.ts` | **Dibuat**: 31 tes regresi |
+| `docs/STATUS.md` | Diubah: bagian ini (append-only) |
+
+Tidak diubah: `prd.md`, `docs/PRD_v0.3.md`, `DESIGN.md`, `supabase/migrations/`, `eval/results/*`,
+file AI (`lib/ai/*`), dependensi, dan seluruh berkas laporan. Tidak ada commit atau push.
+
+### 5. Alur Perhitungan Baru
+
+1. Anggota yang jam tersedianya 0 dikeluarkan lebih dulu (R1).
+2. Beban ideal = total jam seluruh tugas / jumlah anggota yang lolos R1.
+3. Batas R2 = 1,25 x beban ideal (angka tetap).
+4. Tugas diurutkan dari jam terbesar.
+5. Tugas terkunci: pemilik dan jamnya dikunci, tidak dihitung ulang (R5).
+6. Kandidat = lolos R1 dan beban setelah menerima tugas <= batas R2 (R2).
+7. Pool R3 = anggota dengan minimal satu skill wajib level >= 3. Jika kosong, seluruh anggota
+   masuk sebagai saran terbaik dan diberi peringatan.
+8. Skor = 0,40K + 0,30S + 0,20C + 0,10M, dipakai untuk mengurutkan kandidat yang lolos.
+9. Jika tidak ada kandidat R2: tugas dibiarkan tanpa pemilik (pengecualian R4) dan peringatan
+   menyebut angka penyebab.
+
+### 6. Bukti Sebelum dan Sesudah (data identik)
+
+Data: 1 tugas 8 jam, 5 anggota kapasitas 8 jam, ideal 1,6 jam, batas R2 2 jam.
+
+| Aspek | Sebelum | Sesudah |
+|---|---|---|
+| Pemilik tugas | kosong (benar) | kosong (benar, tidak dipaksakan) |
+| Penjelasan | "R2: semua gugur" | "estimasi 8 jam melebihi batas R2 2.00 jam (1,25 x beban ideal 1.60 jam), sehingga tidak ada anggota yang dapat menerimanya" |
+| Label sel | `gugur` | `gugur R2` |
+| Fakta mesin | tidak tersedia | `{taskHours:8, idealLoad:1.6, capHours:2, exceedsCapAlone:true}` |
+| Beban ideal kasus R1 | salah: 8/2 = 4 (batas 5) | benar: 8/1 = 8 (batas 10), tugas kedua kini terpenuhi |
+| Tukar pemilik tugas terkunci | diizinkan (melanggar R5) | ditolak dengan alasan |
+
+### 7. Hasil Tes (output aktual)
+
+`npm test` (vitest) untuk unit deterministik:
+
+```
+npx vitest run test/scoring test/api test/ui test/validation
+ Test Files  18 passed (18)
+      Tests  254 passed (254)
+```
+
+- `test/scoring/matrix_recommendation.test.ts` baru: **31 lulus**, mencakup komponen skor
+  K/S/C/M, R1 (0 jam dikeluarkan, tidak memperkecil beban ideal), R2 (menolak beban melebihi
+  batas, kasus screenshot tidak layak, tanda `exceedsCapAlone`), R3 (fallback dengan peringatan
+  dan penandaan tidak eligible), R4 (satu pemilik, pengecualian R4), R5 (pemilik terkunci tetap,
+  peringatan overload, jam tidak dihitung dua kali, tukar ditolak), serta skenario 2 anggota,
+  4 anggota, anggota tidak tersedia, semua anggota tidak tersedia, dan "tidak ada anggota gugur
+  tanpa alasan".
+- Suite lama tetap lulus tanpa perubahan ekspektasi: `interaction.test.ts` 35 lulus,
+  `rules_r2_r3.test.ts`, `fallback.test.ts`, `numerical_8_4.test.ts` semuanya hijau.
+- `npm test` penuh: 3 kegagalan pada `test/ai/gemini-models.live.test.ts` dan
+  `test/ai/groq.live.test.ts`. Ketiga tes itu memanggil API live dan gagal karena kredensial
+  jaringan, bukan karena perubahan ini. Tes tersebut di luar cakupan dan tidak diubah.
+
+Typecheck, lint, build:
+
+| Perintah | Hasil |
+|---|---|
+| `npx tsc --noEmit` | 0 error |
+| `npx eslint lib/scoring app/p/[code]/result/result-client.tsx test/scoring/matrix_recommendation.test.ts` | 0 error (2 warning lama pada impor tak terpakai di `interaction.ts`, sudah ada sebelumnya) |
+| `npx next build` | berhasil, 12 rute dirender |
+
+### 8. Bukti R1 sampai R5 Tetap Bekerja
+
+- R1: `checkR1` tetap `capacity > 0`; tes "jam tersedia 0 tidak pernah menjadi pemilik" lulus.
+- R2: `checkR2` tidak diubah; tes "menolak beban melebihi batas" lulus; angka 1,25 tetap.
+- R3: `.some()` untuk "minimal satu skill" tidak diubah; tes fallback lulus.
+- R4: satu pemilik per tugas; pengecualian R4 hanya saat R2 tidak terpenuhi; tes lulus.
+- R5: kini dijaga di dua jalur (`globalAssign` dan `assignOwner`); tes lulus.
+
+### 9. Keterbatasan yang Belum Terselesaikan
+
+- **Grafik batang per komponen K/S/C/M** yang diminta pada butir 3E belum dibuat. Matriks saat
+  ini menampilkan skor total per sel dan rincian komponen di panel bawah; tidak ada grafik batang
+  bertumpuk dengan warna per komponen. Ini pekerjaan UI tersendiri, belum dikerjakan.
+- **Uji render komponen** tidak ditambahkan karena repository belum punya infrastruktur render
+  React di vitest (hanya tes logika dan API). Banner status diverifikasi lewat typecheck, build,
+  dan pembacaan kode, bukan lewat tes DOM. Ini TIDAK DITEMUKAN infrastrukturnya.
+- **Verifikasi visual di browser** tidak dilakukan; tidak ada sesi browser pada lingkungan ini.
+  Sesuai R-35 antislop, klaim "sudah diklik" tidak dibuat.
+- Uji coba dengan data Supabase nyata tidak dijalankan karena kredensial dan migrasi belum
+  diverifikasi (status lama masih berlaku).
+
+### Putusan
+
+**SELESAI SEBAGIAN.** Tiga cacat nyata diperbaiki dan dibuktikan dengan tes: pembagi beban ideal
+sadar R1, diagnosis R2 yang tidak lagi menyembunyikan sebab, dan penegakan R5 pada jalur
+interaktif. Status sel matriks kini selalu menyebut aturan penyebab. Yang belum selesai: grafik
+batang komponen K/S/C/M dan verifikasi visual di browser.
+
+---
+
+## T-3.XX lanjutan: Komponen Grafik Matriks Rekomendasi
+
+Tanggal kerja: sesi ini. Melanjutkan bagian T-3.XX di atas, yang mencatat grafik batang K/S/C/M
+sebagai keterbatasan yang belum selesai. Bagian ini menutup keterbatasan tersebut.
+
+### 1. Berkas Baru
+
+| Berkas | Tindakan |
+|---|---|
+| `components/recommendations/candidate-score-chart.tsx` | **Dibuat**: grafik batang bertumpuk per kandidat |
+| `test/ui/candidate-score-chart.test.ts` | **Dibuat**: 11 tes render |
+
+Berkas implementasi yang diubah pada bagian ini: `app/p/[code]/result/result-client.tsx`
+(impor, `chartComponents`, pemasangan grafik di panel rincian). Tidak ada berkas lain yang
+tersentuh. Tidak ada dependensi baru: grafik memakai `framer-motion`, `react`, dan token CSS
+yang sudah ada.
+
+### 2. Alasan Bentuk Grafik
+
+Pertanyaan yang harus dijawab matriks adalah "siapa paling cocok untuk tugas ini, dan mengapa".
+Satu batang bertumpuk per anggota menjawab keduanya sekaligus: panjang batang adalah skor akhir,
+potongannya adalah kontribusi K, S, C, M. Empat grafik terpisah (satu per komponen) hanya
+menjawab "berapa K semua orang" dan memaksa pembaca menjumlahkan sendiri.
+
+Batang dibuat horizontal agar nama anggota terbaca tanpa diputar, dan urutan potongan tetap
+(K, S, C, M) agar dua batang selalu dapat dibandingkan.
+
+### 3. Sumber Setiap Angka
+
+Komponen grafik menerima `ScoreBreakdown` dari mesin (`globalAssign` → `computeScore`) secara
+langsung. Grafik tidak menghitung ulang K/S/C/M, tidak membulatkan berbeda, dan tidak mengarang
+nilai. Satu-satunya perhitungan di dalam grafik adalah penskalaan panjang batang terhadap skor
+tertinggi agar peringkat terlihat saat semua skor rendah; angka yang dicetak tetap nilai asli.
+
+Legenda mencetak bobot yang **benar-benar diterapkan**, bersumber dari state `weights` yang
+sama dengan yang masuk ke `globalAssign`. Pada mode cadangan, K dicetak `bobot 0%` disertai
+kalimat penjelasan, bukan 40%.
+
+### 4. Status Tidak Hanya Warna
+
+- Setiap baris menulis label teks: `utama`, `alt`, atau `tidak`.
+- Anggota yang gugur diberi penanda `✕` beserta huruf aturan penyebabnya (`gugur R2`, `gugur R3`),
+  diturunkan dari peringatan mesin, bukan ditebak.
+- Setiap batang punya `aria-label` berisi seluruh rincian dan skor total, sehingga pembaca layar
+  menerima keputusan yang sama.
+- Warna potongan memakai token `--k`, `--s`, `--c`, `--m` yang sudah diverifikasi kontras WCAG AA
+  pada tema terang dan gelap. Tidak ada warna baru yang diperkenalkan.
+
+### 5. Hasil Tes (output aktual)
+
+```
+npx vitest run test/scoring test/api test/ui test/validation
+ Test Files  19 passed (19)
+      Tests  265 passed (265)
+```
+
+Rincian: 254 tes deterministik sebelumnya tetap lulus, ditambah 11 tes grafik baru
+(`test/ui/candidate-score-chart.test.ts`). Tes grafik memakai `react-dom/server`
+(`renderToStaticMarkup`) karena lingkungan vitest adalah `node`, lalu memeriksa keluaran HTML
+sungguhan: nilai tiap komponen, penanda `utama`/`alt`/`✕ gugur R2`, `aria-label` lengkap, bobot
+legenda 40/30/20/10, kondisi mode cadangan (K 0%), penskalaan batang, dan penanganan daftar
+anggota kosong.
+
+Pemeriksaan typecheck, lint, dan build:
+
+| Perintah | Hasil |
+|---|---|
+| `npx tsc --noEmit` | 0 error |
+| `npx eslint components/recommendations/candidate-score-chart.tsx test/ui/candidate-score-chart.test.ts app/p/[code]/result/result-client.tsx` | 0 error, 0 warning |
+| `npx next build` | berhasil, 12 rute dirender |
+
+### 6. Bukti Grafik Memakai Keluaran Mesin
+
+Data yang sama dengan skenario screenshot (1 tugas 8 jam, 5 anggota, beban ideal 1,6 jam, batas
+R2 2 jam) dijalankan melalui `globalAssign` lalu dirender ke markup. Teks yang dihasilkan:
+
+```
+A ✕ gugur R2  K 67 S 80 C 0 M 50  56 %
+B ✕ gugur R2  K 63 S 20 C 0 M 50  36 %
+C ✕ gugur R2  K 60 S 20 C 0 M 50  35 %
+D ✕ gugur R2  K 57 S 20 C 0 M 50  34 %
+E ✕ gugur R2  K 53 S 20 C 0 M 50  32 %
+K Kemiripan konten · bobot 40%   S Kecocokan skill · bobot 30%
+C Sisa kapasitas · bobot 20%     M Minat · bobot 10%
+Batas R2 2.00 jam (1,25 × beban ideal 1.60 jam).
+```
+
+Angka total (56, 36, 35, 34, 32) identik dengan keluaran mesin. Tidak ada anggota yang diberi
+tanda `utama`, konsisten dengan keputusan mesin bahwa tugas 8 jam tidak dapat dipenuhi siapa pun.
+
+### 7. Keterbatasan yang Masih Berlaku
+
+- **Verifikasi visual di browser belum dilakukan.** Tidak ada sesi browser pada lingkungan ini,
+  sehingga tata letak akhir grafik di layar tidak diklaim sudah diperiksa. Yang diverifikasi
+  adalah keluaran markup statis, typecheck, lint, dan build.
+- **Tes interaksi DOM** (klik, fokus, hover) belum ada karena repository belum memakai
+  lingkungan DOM di vitest. Ini TIDAK DITEMUKAN infrastrukturnya, bukan sengaja dilewati.
+- Data Supabase nyata dan ekspor PDF tetap belum diverifikasi, status lama masih berlaku.
+
+### Putusan
+
+**SELESAI.** Grafik batang per komponen K/S/C/M tersedia dan terpasang pada panel rincian
+matriks, dengan angka yang berasal langsung dari mesin, legenda berbobot nyata, dan status yang
+tidak bergantung pada warna. Matriks tetap menjadi pusat informasi; grafik melengkapi, bukan
+menggantikan. Seluruh 265 tes deterministik lulus, typecheck dan lint bersih, build berhasil.

@@ -7,6 +7,7 @@ import { Task, Member, TaskAssignment, AssignmentResult } from '@/lib/scoring/ty
 import { globalAssign } from '@/lib/scoring/assign';
 import { DEFAULT_WEIGHTS, FALLBACK_WEIGHTS, WORKLOAD_CAP_MULTIPLIER } from '@/lib/scoring/constants';
 import { memberReason } from '@/lib/scoring/explain-local';
+import { checkR1 } from '@/lib/scoring/rules';
 import {
   redistributeWeights,
   weightPercent,
@@ -29,6 +30,7 @@ import { recordEvent } from '@/lib/client/events';
 import { LoadMeter } from '@/components/motion/score-bar';
 import { RevealGroup, RevealItem } from '@/components/motion/reveal';
 import { ScoreBreakdown } from '@/components/recommendations/score-breakdown';
+import { CandidateScoreChart } from '@/components/recommendations/candidate-score-chart';
 import { DURATION, EASE } from '@/lib/motion/tokens';
 import { WorkspaceShell } from '@/components/ui/workspace-shell';
 import { Button, Chip, Eyebrow } from '@/components/ui/primitives';
@@ -751,6 +753,118 @@ export function ResultClient({ params }: { params: Promise<{ code: string }> }) 
   }
 
   const lockedCount = currentResult.assignments.filter((a) => a.isLocked).length;
+
+  /*
+   * The chart legend must print the weights the scores were actually produced
+   * with. A hardcoded 40/30/20/10 would contradict the sliders the moment the
+   * user moves one, and in fallback mode K is not counted at all.
+   */
+  const chartComponents = [
+    { key: 'K' as const, label: 'Kemiripan konten', color: 'var(--k)', weight: isFallback ? 0 : weights.K },
+    { key: 'S' as const, label: 'Kecocokan skill', color: 'var(--s)', weight: weights.S },
+    { key: 'C' as const, label: 'Sisa kapasitas', color: 'var(--c)', weight: weights.C },
+    { key: 'M' as const, label: 'Minat', color: 'var(--m)', weight: weights.M },
+  ];
+
+  /*
+   * Conditions that change what the matrix MEANS, stated once at the top
+   * instead of repeated in every cell. Every branch reads engine output: the
+   * warning codes and `detail` facts globalAssign already computed, plus the
+   * roster's own capacity and skill levels. Nothing here re-derives R1/R2/R3,
+   * so the banner can never disagree with the scores below it.
+   */
+  const assignmentStatus: { key: string; tone: 'danger' | 'warn' | 'info'; headline: string; detail: string }[] =
+    (() => {
+      const items: { key: string; tone: 'danger' | 'warn' | 'info'; headline: string; detail: string }[] = [];
+
+      const allR1Excluded = members.length > 0 && members.every((m) => !checkR1(m));
+      if (allR1Excluded) {
+        items.push({
+          key: 'r1-all',
+          tone: 'danger',
+          headline: 'Tidak ada anggota dengan jam tersedia',
+          detail:
+            'R1 mengeluarkan setiap anggota yang jam tersedianya 0, sehingga belum ada yang bisa ditugaskan. Isi jam tersedia pada profil anggota.',
+        });
+      }
+
+      const r2Warnings = currentResult.warnings.filter((w) => w.code === 'r2_no_candidate');
+      const impossible = r2Warnings.filter((w) => w.detail?.exceedsCapAlone);
+      const blocked = r2Warnings.filter((w) => w.detail && !w.detail.exceedsCapAlone);
+
+      if (impossible.length > 0) {
+        const w = impossible[0].detail!;
+        items.push({
+          key: 'r2-impossible',
+          tone: 'danger',
+          headline: 'Estimasi usaha melebihi batas beban yang diizinkan',
+          detail:
+            `${impossible.length} tugas lebih besar daripada batas R2 ` +
+            `(${w.capHours.toFixed(2)} jam = 1,25 × beban ideal ${w.idealLoad.toFixed(2)} jam), ` +
+            `misalnya ${w.taskHours} jam. Tidak ada anggota yang dapat menerimanya tanpa melanggar R2, ` +
+            `jadi tugas itu dibiarkan tanpa penanggung jawab (pengecualian R4). ` +
+            `Perkecil estimasi jam tugas atau tambah anggota agar beban ideal naik.`,
+        });
+      }
+
+      if (blocked.length > 0) {
+        items.push({
+          key: 'r2-blocked',
+          tone: 'warn',
+          headline: 'Sebagian tugas belum mendapat penanggung jawab karena batas R2',
+          detail:
+            `${blocked.length} tugas tidak memperoleh kandidat: setiap anggota yang memenuhi R1 dan R3 ` +
+            `akan melampaui 1,25 × beban ideal bila menerimanya. Tugas dibiarkan kosong dan tidak dipaksakan.`,
+        });
+      }
+
+      const r3Warnings = currentResult.warnings.filter((w) => w.code === 'r3_no_candidate');
+      if (r3Warnings.length > 0) {
+        items.push({
+          key: 'r3-fallback',
+          tone: 'warn',
+          headline: 'R3 tidak menemukan kandidat level 3',
+          detail:
+            `${r3Warnings.length} tugas tidak memiliki anggota dengan skill wajib pada level 3 atau lebih. ` +
+            `Sesuai PRD, sistem tetap menampilkan saran terbaik, tetapi anggota tersebut BUKAN kandidat ` +
+            `yang memenuhi R3.`,
+        });
+      }
+
+      const lockedOverload = currentResult.warnings.filter((w) => w.code === 'r2_locked_overload');
+      if (lockedOverload.length > 0) {
+        items.push({
+          key: 'r5-overload',
+          tone: 'warn',
+          headline: 'Tugas terkunci menyebabkan beban berlebih',
+          detail:
+            `${lockedOverload.length} tugas terkunci mempertahankan pemiliknya meskipun melampaui batas R2. ` +
+            `R5 dipertahankan dan tugas tidak dipindahkan.`,
+        });
+      }
+
+      if (items.length === 0) {
+        const unassigned = currentResult.assignments.filter((a) => !a.primaryMemberId).length;
+        if (unassigned > 0) {
+          items.push({
+            key: 'unassigned',
+            tone: 'warn',
+            headline: 'Ada tugas tanpa penanggung jawab',
+            detail: `${unassigned} tugas belum memiliki penanggung jawab yang memenuhi aturan. Lihat alasan pada baris tugas.`,
+          });
+        } else {
+          items.push({
+            key: 'ok',
+            tone: 'info',
+            headline: 'Semua tugas mendapat penanggung jawab yang memenuhi R1–R4',
+            detail: 'R2 dan R3 terpenuhi untuk setiap penugasan. Kolom alasan pada tiap sel menjelaskan pilihan skornya.',
+          });
+        }
+      }
+
+      return items;
+    })();
+
   const changedNow = new Set(rowChanges.map((c) => c.taskId));
   const previewAssignment = preview ? resultFor(preview.taskId, displayed) : null;
   const previewTask = preview ? taskById.get(preview.taskId) : undefined;
@@ -1044,6 +1158,37 @@ export function ResultClient({ params }: { params: Promise<{ code: string }> }) 
             </div>
           </div>
 
+          {/* FR-08: the requirement list is only useful with its verdict. This
+              banner states, from engine output alone, which of the PRD v0.3
+              conditions applies (no owner, R3 fallback, R1 exclusion, or an
+              effort above the R2 cap) instead of leaving the reader to infer it
+              from five identical "gugur" cells. */}
+          {assignmentStatus.length > 0 && (
+            <ul className="mb-2 space-y-1.5" data-testid="assignment-status">
+              {assignmentStatus.map((s) => (
+                <li
+                  key={s.key}
+                  data-testid={`status-${s.key}`}
+                  className={`rounded-[var(--radius-input)] px-3 py-2 text-[11.5px] leading-relaxed ${
+                    s.tone === 'danger'
+                      ? 'bg-danger-surface text-danger'
+                      : s.tone === 'warn'
+                        ? 'bg-warn-surface text-warn'
+                        : 'bg-mist text-ink'
+                  }`}
+                >
+                  <p className="font-semibold">
+                    <span aria-hidden="true" className="mr-1">
+                      {s.tone === 'danger' ? '⚠' : s.tone === 'warn' ? '▲' : '·'}
+                    </span>
+                    {s.headline}
+                  </p>
+                  <p className="mt-0.5">{s.detail}</p>
+                </li>
+              ))}
+            </ul>
+          )}
+
           {/* FR-18: preview bar. It sits above the table, so it never covers a cell. */}
           <AnimatePresence>
             {preview && previewAssignment && previewTask && previewMember && (
@@ -1247,6 +1392,17 @@ export function ResultClient({ params }: { params: Promise<{ code: string }> }) 
                         const isPrimary = assignment.primaryMemberId === member.id;
                         const b = score?.breakdown ?? { K: 0, S: 0, C: 0, M: 0, total: 0 };
                         const percent = Math.round(b.total * 100);
+                        /*
+                         * Name the rule that excluded this member instead of a
+                         * bare "gugur". The warnings carry the rule prefix, so
+                         * the cell stays consistent with the panel below it and
+                         * the reader never has to guess why a score is greyed
+                         * out. R1 wins when several rules apply, because it runs
+                         * first and makes the others moot.
+                         */
+                        const rule = (score?.warnings ?? [])
+                          .map((w) => w.match(/^(R[1-5])/)?.[1])
+                          .find((r): r is string => Boolean(r));
                         const isFocused = focusedCell?.taskId === task.id && focusedCell?.memberId === member.id;
                         return (
                           <td key={member.id} className="border-l border-line/60 p-0 align-top">
@@ -1260,7 +1416,7 @@ export function ResultClient({ params }: { params: Promise<{ code: string }> }) 
                                   ? 'penanggung jawab saat ini'
                                   : score?.isEligible
                                     ? 'kandidat alternatif'
-                                    : 'tidak lolos aturan'
+                                    : `tidak memenuhi aturan${score?.warnings?.length ? `, ${score.warnings.join(' ')}` : ''}`
                               }, skor ${percent}%. Tekan Enter untuk menetapkan, L untuk mengunci.`}
                               onFocus={() => {
                                 setFocusedCell({ taskId: task.id, memberId: member.id });
@@ -1298,7 +1454,9 @@ export function ResultClient({ params }: { params: Promise<{ code: string }> }) 
                               ) : score?.isEligible ? (
                                 <span className="text-[9px] uppercase tracking-[0.06em]">kandidat</span>
                               ) : (
-                                <span className="text-[9px] uppercase tracking-[0.06em]">gugur</span>
+                                <span className="text-[9px] uppercase tracking-[0.06em]">
+                                  {rule ? `gugur ${rule}` : 'gugur'}
+                                </span>
                               )}
                               <span
                                 aria-hidden="true"
@@ -1477,6 +1635,38 @@ export function ResultClient({ params }: { params: Promise<{ code: string }> }) 
                         Tutup rincian
                       </button>
                     </div>
+
+                    {/* The chart answers "who fits this task and why" in one
+                        glance, before the written detail below. Every number is
+                        the engine's breakdown; nothing is recomputed here. */}
+                    <CandidateScoreChart
+                      rows={members
+                        .map((m) => {
+                          const s = assignment.scores[m.id];
+                          if (!s) return null;
+                          const rule = (s.warnings ?? [])
+                            .map((w) => w.match(/^(R[1-5])/)?.[1])
+                            .find((r): r is string => Boolean(r));
+                          return {
+                            memberId: m.id,
+                            name: m.name,
+                            K: s.breakdown.K,
+                            S: s.breakdown.S,
+                            C: s.breakdown.C,
+                            M: s.breakdown.M,
+                            total: s.breakdown.total,
+                            isPrimary: assignment.primaryMemberId === m.id,
+                            isAlternative: assignment.alternativeMemberId === m.id,
+                            isEligible: s.isEligible,
+                            rule,
+                          };
+                        })
+                        .filter((r): r is NonNullable<typeof r> => r !== null)}
+                      components={chartComponents}
+                      isFallback={isFallback}
+                      idealLoad={currentResult.idealLoad}
+                      capHours={currentResult.idealLoad * WORKLOAD_CAP_MULTIPLIER}
+                    />
 
                     <div className="grid gap-3 sm:grid-cols-2">
                       <div>

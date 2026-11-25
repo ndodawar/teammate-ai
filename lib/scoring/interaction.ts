@@ -166,8 +166,11 @@ function validateChange(
   }
 
   // R2: workload cap, measured on the intended final state (excluding this task).
+  // The divisor matches the engine: only members who pass R1 carry a share of
+  // the work, otherwise a member with 0 hours would shrink everyone's R2 cap.
   const totalEffort = tasks.reduce((sum, t) => sum + t.estimated_hours, 0);
-  const idealLoad = members.length > 0 ? totalEffort / members.length : 0;
+  const loadBearingMembers = members.filter((m) => checkR1(m));
+  const idealLoad = loadBearingMembers.length > 0 ? totalEffort / loadBearingMembers.length : 0;
   const currentLoad = Object.entries(intended)
     .filter(([taskId, memberId]) => memberId === targetMemberId && taskId !== targetTaskId)
     .reduce((sum, [taskId]) => sum + (tasks.find((t) => t.id === taskId)?.estimated_hours ?? 0), 0);
@@ -202,6 +205,20 @@ export function assignOwner(
 ): { next: TaskAssignment[]; changed: boolean; error?: string } {
   const target = assignments.find((a) => a.taskId === taskId);
   if (!target) return { next: assignments, changed: false };
+
+  /*
+   * R5 / US-12: a locked task keeps its owner until the user unlocks it. The
+   * engine honours this on recompute, but this path is the direct edit and used
+   * to hand the task to someone else anyway, so the screen and the stored
+   * assignments disagreed. Unlocking on its own is still allowed.
+   */
+  if (target.isLocked && target.primaryMemberId !== memberId && !options.lock) {
+    return {
+      next: assignments,
+      changed: false,
+      error: 'Tugas terkunci (R5). Buka kunci terlebih dahulu untuk mengganti penanggung jawab.',
+    };
+  }
 
   const nextLocked = options.lock ? true : target.isLocked;
   const changed = target.primaryMemberId !== memberId || target.isLocked !== nextLocked;

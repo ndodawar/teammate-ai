@@ -33,7 +33,17 @@ export function globalAssign(
   const weights = options.weights ?? (isFallback ? FALLBACK_WEIGHTS : DEFAULT_WEIGHTS);
   const cosineMap = options.cosineMap ?? {};
   const totalEffort = tasks.reduce((sum, t) => sum + t.estimated_hours, 0);
-  const idealLoad = members.length > 0 ? totalEffort / members.length : 0;
+  /*
+   * R1 runs before the workload budget is spent: a member with 0 available
+   * hours is out of the candidate pool, so they must not also receive a share
+   * of the work. Dividing by every member let an excluded member inflate the
+   * pool, shrink the ideal load, and tighten the R2 cap for everyone still in
+   * it. With 8 hours across 2 members where one has 0 hours, the old divisor
+   * produced an ideal load of 4 (cap 5) instead of 8 (cap 10), so the second
+   * task was reported as unassignable for a member who had room for it.
+   */
+  const loadBearingMembers = members.filter(m => checkR1(m));
+  const idealLoad = loadBearingMembers.length > 0 ? totalEffort / loadBearingMembers.length : 0;
 
   const memberLoads: Record<string, number> = {};
   members.forEach(m => { memberLoads[m.id] = 0; });
@@ -170,8 +180,6 @@ export function globalAssign(
       const sortedCandidates = Object.values(scores)
         .filter(c => c.isEligible)
         .sort((a, b) => b.breakdown.total - a.breakdown.total);
-      // Members who at least clear R1: used only to explain an empty row.
-      const r1Pool = Object.values(scores).filter(c => checkR1(members.find(m => m.id === c.memberId)!));
 
       if (sortedCandidates.length > 0) {
         primaryMemberId = sortedCandidates[0].memberId;
@@ -210,18 +218,37 @@ export function globalAssign(
 
           const everyR1Blocked = members.every(m => !checkR1(m));
           if (!everyR1Blocked) {
+            const capHours = idealLoad * WORKLOAD_CAP_MULTIPLIER;
+            // A task heavier than the cap can never be placed, however idle the
+            // roster is; saying "no candidate" alone would send the user looking
+            // for a free member who does not exist.
+            const exceedsCapAlone = task.estimated_hours > capHours;
             warnings.push({
               code: r1Pool.length > 0 ? 'r2_no_candidate' : 'r3_no_candidate',
               taskId: task.id,
               message:
                 r1Pool.length > 0
-                  ? `Tugas "${task.title}" belum memiliki penanggung jawab: tidak ada ` +
-                    `kandidat yang memenuhi batas beban R2 ` +
-                    `${(idealLoad * WORKLOAD_CAP_MULTIPLIER).toFixed(2)} jam ` +
-                    `(1,25 × beban ideal ${idealLoad.toFixed(2)} jam).`
+                  ? exceedsCapAlone
+                    ? `Tugas "${task.title}" belum memiliki penanggung jawab: estimasi ` +
+                      `${task.estimated_hours} jam melebihi batas R2 ${capHours.toFixed(2)} jam ` +
+                      `(1,25 × beban ideal ${idealLoad.toFixed(2)} jam), sehingga tidak ada ` +
+                      `anggota yang dapat menerimanya.`
+                    : `Tugas "${task.title}" belum memiliki penanggung jawab: tidak ada ` +
+                      `kandidat yang memenuhi batas beban R2 ` +
+                      `${capHours.toFixed(2)} jam ` +
+                      `(1,25 × beban ideal ${idealLoad.toFixed(2)} jam).`
                   : `Tugas "${task.title}" belum memiliki penanggung jawab: tidak ada ` +
                     `anggota dengan skill wajib (${task.required_skills.join(', ')}) ` +
                     `pada level minimal 3 (R3), dan tidak ada kandidat lain yang memenuhi syarat.`,
+              detail:
+                r1Pool.length > 0
+                  ? {
+                      taskHours: task.estimated_hours,
+                      idealLoad,
+                      capHours,
+                      exceedsCapAlone,
+                    }
+                  : undefined,
             });
           }
         }

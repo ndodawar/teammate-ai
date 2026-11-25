@@ -54,11 +54,19 @@ https://doi.org/10.1023/A:1021240730564
 ## R5. Mikolov, T., Sutskever, I., Chen, K., Corrado, G., & Dean, J. (2013)
 
 **Distributed representations of words and phrases and their compositionality.**
-Dalam *Advances in Neural Information Processing Systems 26 (NIPS 2013)* (hlm. 3111–3119).
-https://papers.nips.cc/paper/5021-distributed-representations-of-words-and-phrases-and-their-compositionality
+Dalam *Advances in Neural Information Processing Systems* (Vol. 26).
+https://papers.nips.cc/paper_files/paper/2013/hash/9aa42b31882ec039965f3c4923ce901b-Abstract.html
 
-- Sumber pemeriksaan: halaman prosiding NeurIPS resmi (`proceedings.neurips.cc/paper/5021`), Google
-  Research. Halaman 3111–3119 sesuai prosiding NIPS 2013.
+- Sumber pemeriksaan: halaman prosiding NeurIPS resmi
+  (`papers.nips.cc/paper_files/paper/2013/hash/9aa42b31882ec039965f3c4923ce901b-Abstract.html`).
+  Metadata halaman memuat `citation_title`, lima `citation_author` (Mikolov, Sutskever, Chen,
+  Corrado, Dean), `citation_journal_title` = Advances in Neural Information Processing Systems,
+  `citation_volume` = 26, `citation_publication_date` = 2013.
+- **Koreksi (T-B.03):** rentang halaman "3111–3119" **dihapus** karena tidak dapat dibuktikan
+  dari sumber primer. Halaman resmi NeurIPS **tidak memuat** `citation_firstpage` maupun
+  `citation_lastpage`, dan tidak ada kemunculan angka 3111 atau 3119 di halaman tersebut.
+  Prosiding NeurIPS 2013 tidak menerbitkan nomor halaman pada metadata resminya dan tidak
+  memiliki DOI. Format APA 7 karena itu memakai "(Vol. 26)" tanpa halaman.
 - Dipakai di: Bab 2.3 (embedding sebagai representasi vektor).
 
 ## R6. Reimers, N., & Gurevych, I. (2019)
