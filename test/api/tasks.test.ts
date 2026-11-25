@@ -239,6 +239,7 @@ describe('Tasks API (T-3.31 / T-3.36)', () => {
 
     const res = await putTask('t1', {
       title: 'Updated Title',
+      description: 'Judul diperbarui.',
       effort: 5,
       estimated_hours: 25,
       required_skills: ['pemrograman backend'],
@@ -259,10 +260,13 @@ describe('Tasks API (T-3.31 / T-3.36)', () => {
 
     const res = await putTask('t1', {
       title: 'Updated Title',
+      description: 'Judul diperbarui.',
       effort: 5,
       required_skills: ['pemrograman backend'],
     });
     expect(res.status).toBe(400);
+    // The only thing missing is the hours, so the message must say so.
+    expect((await res.json()).error).toContain('Estimasi jam');
     expect(updatedRow).toBeNull();
   });
 

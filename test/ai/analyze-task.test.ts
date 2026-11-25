@@ -412,4 +412,37 @@ describe('Task Analysis Service & Route Handler', () => {
     const res = await POST(req);
     expect(res.status).toBe(400);
   });
+
+  /*
+   * T-FIX-API-01: an empty description used to come back as the opaque string
+   * "Invalid request payload", so the user could not tell which field was wrong.
+   * The route now returns the schema's own sentence.
+   */
+  it('POST /api/analyze-task returns a readable message for an empty description', async () => {
+    const req = new Request('http://localhost:3000/api/analyze-task', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tasks: [{ id: 'task-1', title: 'Task Title', description: '' }],
+      }),
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toBe('Deskripsi tugas wajib diisi.');
+  });
+
+  it('POST /api/analyze-task rejects a whitespace-only description', async () => {
+    const req = new Request('http://localhost:3000/api/analyze-task', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tasks: [{ id: 'task-1', title: 'Task Title', description: '   ' }],
+      }),
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toBe('Deskripsi tugas wajib diisi.');
+  });
 });

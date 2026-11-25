@@ -42,6 +42,8 @@ export default function TasksClient({ code }: { code: string }) {
   const [draft, setDraft] = useState<TaskDraft>(EMPTY_DRAFT);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  /* T-FIX-API-01: field-level error, shown under the description box itself. */
+  const [descriptionError, setDescriptionError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   const [templateDrafts, setTemplateDrafts] = useState<TemplateDraftItem[]>([]);
@@ -100,12 +102,18 @@ export default function TasksClient({ code }: { code: string }) {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setFormError(null);
+    setDescriptionError(null);
     setActionError(null);
     setStatusMessage(null);
 
+    /*
+     * The description is required by PRD US-06, so it is sent as the text the
+     * user typed (trimmed) rather than as null. Sending null here was how a
+     * blank description reached the API and came back as a raw schema error.
+     */
     const payload = {
       title: draft.title.trim(),
-      description: draft.description.trim() === '' ? null : draft.description.trim(),
+      description: draft.description.trim(),
       effort: Number(draft.effort),
       estimated_hours: draft.estimated_hours.trim() === '' ? NaN : Number(draft.estimated_hours),
       due_date: draft.due_date === '' ? null : draft.due_date,
@@ -116,6 +124,12 @@ export default function TasksClient({ code }: { code: string }) {
 
     const parsed = taskSchema.safeParse(payload);
     if (!parsed.success) {
+      /* Put the message on the field it belongs to, not only in a banner above
+         the form, so the reader does not have to hunt for the box at fault. */
+      const descriptionIssue = parsed.error.issues.find((issue) => issue.path[0] === 'description');
+      if (descriptionIssue) {
+        setDescriptionError(descriptionIssue.message);
+      }
       setFormError(parsed.error.issues[0]?.message || 'Data tugas tidak valid.');
       return;
     }
@@ -804,10 +818,28 @@ export default function TasksClient({ code }: { code: string }) {
                   rows={3}
                   maxLength={500}
                   value={draft.description}
-                  onChange={(e) => setDraft((prev) => ({ ...prev, description: e.target.value }))}
+                  onChange={(e) => {
+                    setDraft((prev) => ({ ...prev, description: e.target.value }));
+                    /* Clear the error as soon as the field holds real text, so the
+                       message stops nagging before the next submit. */
+                    if (descriptionError && e.target.value.trim() !== '') setDescriptionError(null);
+                  }}
                   placeholder="Jelaskan lingkup pekerjaan tugas ini."
-                  className={`${FIELD} resize-y py-2.5 leading-relaxed`}
+                  aria-invalid={descriptionError ? true : undefined}
+                  aria-describedby={descriptionError ? 'task-description-error' : undefined}
+                  className={`${FIELD} resize-y py-2.5 leading-relaxed ${
+                    descriptionError ? 'shadow-[inset_0_0_0_1px_var(--danger)]' : ''
+                  }`}
                 />
+                {descriptionError && (
+                  <p
+                    id="task-description-error"
+                    role="alert"
+                    className="text-[11.5px] font-medium text-danger"
+                  >
+                    {descriptionError}
+                  </p>
+                )}
                 <span className="block text-right font-mono text-[10.5px] tabular-nums text-muted" data-numeric>
                   {draft.description.length}/500 karakter
                 </span>

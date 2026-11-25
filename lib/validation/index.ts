@@ -3,7 +3,21 @@ import { SKILL_TAXONOMY } from '@/lib/scoring/types';
 
 export const taskSchema = z.object({
   title: z.string().trim().min(1, 'Judul tugas wajib diisi.'),
-  description: z.string().max(500, 'Deskripsi tugas maksimal 500 karakter.').optional().nullable(),
+  /*
+   * PRD US-06 lists "Deskripsi tugas wajib diisi" as an acceptance criterion, so
+   * this is a required field, not an optional one. It used to be
+   * `.optional().nullable()`, which meant the form accepted a blank description
+   * and stored NULL, while `/api/analyze-task` required at least one character.
+   * The two schemas disagreed, and the user met the API's raw Zod text
+   * ("Too small: expected string to have >=1 characters") instead of a
+   * sentence. `trim()` runs before `min(1)` so a field holding only spaces is
+   * treated as empty rather than as content.
+   */
+  description: z
+    .string('Deskripsi tugas wajib diisi.')
+    .trim()
+    .min(1, 'Deskripsi tugas wajib diisi.')
+    .max(500, 'Deskripsi tugas maksimal 500 karakter.'),
   difficulty: z.number().int().min(1).max(5).optional().default(3),
   estimated_hours: z
     .number('Estimasi jam wajib diisi berupa angka.')

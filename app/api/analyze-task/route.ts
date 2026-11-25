@@ -9,8 +9,14 @@ const requestSchema = z.object({
     z.object({
       id: z.string().min(1),
       title: z.string().min(1),
-      // PRD limit: a task description is at most 500 characters.
-      description: z.string().min(1).max(500, 'Deskripsi tugas maksimal 500 karakter.'),
+      // PRD limit: a task description is at most 500 characters, and US-06 makes
+      // it required. `trim()` runs before `min(1)` so a description holding only
+      // whitespace is rejected here, matching `taskSchema`.
+      description: z
+        .string('Deskripsi tugas wajib diisi.')
+        .trim()
+        .min(1, 'Deskripsi tugas wajib diisi.')
+        .max(500, 'Deskripsi tugas maksimal 500 karakter.'),
     })
   ).min(1).max(50),
 });
@@ -23,9 +29,19 @@ export async function POST(request: Request) {
     const parsed = requestSchema.safeParse(body);
 
     if (!parsed.success) {
-      // A malformed request is a client error, never an AI fallback.
+      /*
+       * Surface the first readable message instead of the opaque
+       * "Invalid request payload". The generic sentence stays as the fallback
+       * for a body that is not shaped like the schema at all, but a field-level
+       * problem now reaches the user as the sentence the schema already
+       * carries ("Deskripsi tugas wajib diisi.").
+       */
+      const firstMessage = parsed.error.issues[0]?.message;
       return NextResponse.json(
-        { error: 'Invalid request payload', details: parsed.error.format() },
+        {
+          error: firstMessage || 'Invalid request payload',
+          details: parsed.error.format(),
+        },
         { status: 400 }
       );
     }
