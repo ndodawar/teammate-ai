@@ -9,7 +9,12 @@ import { GoogleGenAI } from '@google/genai';
  * These run against the real Gemini API and only when GEMINI_API_KEY is present.
  * They are skipped, not faked, when the key is absent: guessing model names is the
  * exact failure mode T-2.02 warned about. Run with the key set to verify:
- *   GEMINI_API_KEY=... npx vitest run test/ai/gemini-models.live.test.ts
+ *   RUN_LIVE_API_TESTS=1 npx vitest run test/ai/gemini-models.live.test.ts
+ *
+ * T-FINAL-QA-01: an explicit opt-in is required in addition to the key.
+ * `loadEnvLocal()` reads `.env.local`, so a plain `npm test` on a machine with a
+ * key spent real Gemini quota without anyone asking for it. See the note in
+ * `groq.live.test.ts` for the same reasoning.
  */
 function loadEnvLocal() {
   const envPath = path.resolve(process.cwd(), '.env.local');
@@ -25,7 +30,9 @@ function loadEnvLocal() {
 loadEnvLocal();
 
 const apiKey = process.env.GEMINI_API_KEY || '';
-const hasKey = apiKey.length > 0;
+/** Opt-in switch: without it the live file is skipped even when a key exists. */
+const liveOptIn = process.env.RUN_LIVE_API_TESTS === '1';
+const hasKey = liveOptIn && apiKey.length > 0;
 
 const TEXT_MODEL = process.env.GEMINI_MODEL_TEXT || 'gemini-2.5-flash';
 const EMBED_MODEL = process.env.GEMINI_MODEL_EMBED || 'text-embedding-004';

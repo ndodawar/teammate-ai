@@ -14,10 +14,19 @@ import { analyzeTasks } from '@/lib/ai/analyze-task';
  * warned about.
  *
  * Run it explicitly:
- *   GROQ_API_KEY=gsk_... GROQ_MODEL_TEXT=<model> npx vitest run test/ai/groq.live.test.ts
+ *   RUN_LIVE_API_TESTS=1 npx vitest run test/ai/groq.live.test.ts
+ *
+ * T-FINAL-QA-01: the key being present is no longer enough.
+ *
+ * `loadEnvLocal()` reads `.env.local`, so on a machine with a working key a plain
+ * `npm test` ran this file and spent real Groq quota on every full run, without
+ * anyone asking for it. During the validation pass that happened three times.
+ * The suite now requires an explicit `RUN_LIVE_API_TESTS=1`, so a normal test run
+ * is quota-free and a live check is always a deliberate act. It also keeps the
+ * default suite deterministic: a provider hiccup can no longer turn `npm test`
+ * red for a reason unrelated to the code under test.
  *
  * Cost note: this file sends 3 small requests in total, well inside any free tier.
- * It is NOT part of the default suite's success criteria — a skip is a pass here.
  */
 function loadEnvLocal() {
   const envPath = path.resolve(process.cwd(), '.env.local');
@@ -35,7 +44,9 @@ loadEnvLocal();
 const apiKey = process.env.GROQ_API_KEY || '';
 const model = process.env.GROQ_MODEL_TEXT || '';
 const baseUrl = process.env.GROQ_BASE_URL || 'https://api.groq.com/openai/v1';
-const configured = apiKey.length > 0 && model.length > 0;
+/** Opt-in switch: without it the live file is skipped even when keys exist. */
+const liveOptIn = process.env.RUN_LIVE_API_TESTS === '1';
+const configured = liveOptIn && apiKey.length > 0 && model.length > 0;
 
 describe.skipIf(!configured)('LIVE: Groq model availability', () => {
   it('confirms the configured model exists on this account before using it', async () => {

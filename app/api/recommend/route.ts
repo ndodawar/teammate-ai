@@ -5,6 +5,7 @@ import { globalAssign } from '@/lib/scoring/assign';
 import { explainAssignments } from '@/lib/ai/explain';
 import { AiRun, sanitizeErrorMessage } from '@/lib/ai/call-budget';
 import { recordAiRun } from '@/lib/ai/ai-run';
+import { recommendRequestSchema } from '@/lib/validation';
 import { Task, Member, SkillTag } from '@/lib/scoring/types';
 
 export async function POST(request: Request) {
@@ -12,11 +13,30 @@ export async function POST(request: Request) {
   let run: AiRun | null = null;
 
   try {
-    const { code, weights, isFallback } = await request.json();
-
-    if (!code) {
-      return NextResponse.json({ error: 'Project code is required' }, { status: 400 });
+    /*
+     * T-FINAL-QA-01: validate the body before it reaches the engine.
+     *
+     * `weights` used to be forwarded as-is, so a NaN or an over-100% set produced
+     * a NaN or inflated score instead of an error. Validation runs before the
+     * project lookup and before `AiRun`, so a malformed request costs no quota.
+     */
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ error: 'Body request harus berupa JSON.' }, { status: 400 });
     }
+
+    const parsed = recommendRequestSchema.safeParse(body);
+    if (!parsed.success) {
+      const firstMessage = parsed.error.issues[0]?.message;
+      return NextResponse.json(
+        { error: firstMessage || 'Data permintaan tidak valid.' },
+        { status: 400 }
+      );
+    }
+
+    const { code, weights, isFallback } = parsed.data;
 
     const supabase = getSupabaseClient();
 

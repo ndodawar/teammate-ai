@@ -25,6 +25,7 @@ import {
   type Weights,
   type WeightKey,
   type ExportRow,
+  type ExportEligibility,
   type Snapshot,
   type UndoEntry,
 } from '@/lib/scoring/interaction';
@@ -570,12 +571,26 @@ export function ResultClient({ params }: { params: Promise<{ code: string }> }) 
       const alternative = assignment.alternativeMemberId
         ? memberById.get(assignment.alternativeMemberId)
         : undefined;
+      /*
+       * T-FINAL-QA-01: carry the engine's own verdict into the export.
+       *
+       * An R3 fallback owner has `isEligible: false`; the card and the matrix
+       * say "gugur R3", but the export used to print their name as an ordinary
+       * "Penanggung Jawab". The verdict is read from the same
+       * `CandidateScore.isEligible` the screen uses, so the two cannot disagree.
+       */
+      const eligibility: ExportEligibility | undefined = primary
+        ? score?.isEligible
+          ? 'layak'
+          : 'tidak layak'
+        : undefined;
       return {
         task: task.title,
         hours: task.estimated_hours,
         effort: task.difficulty,
         primary: primary?.name ?? '',
         alternative: alternative?.name ?? '',
+        eligibility,
         total: (b.total * 100).toFixed(0),
         K: (b.K * 100).toFixed(0),
         S: (b.S * 100).toFixed(0),
@@ -1058,6 +1073,10 @@ export function ResultClient({ params }: { params: Promise<{ code: string }> }) 
       task,
       ownerName: owner?.name ?? null,
       ownerScore,
+      // The engine's own verdict, so the card can label an R3 fallback owner.
+      ownerIsEligible: assignment.primaryMemberId
+        ? (assignment.scores[assignment.primaryMemberId]?.isEligible ?? null)
+        : null,
       alternativeName: altIsValid ? (memberById.get(altId!)?.name ?? null) : null,
       alternativeScore: altIsValid ? (altScore?.breakdown.total ?? null) : null,
       warnings: currentResult.warnings.filter((w) => w.taskId === task.id),

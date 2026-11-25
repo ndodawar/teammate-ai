@@ -345,7 +345,26 @@ export interface ExportRow {
   M: string;
   locked: 'ya' | 'tidak';
   reason: string;
+  /**
+   * FR-08 / FR-09 / T-FINAL-QA-01: the eligibility verdict for `primary`.
+   *
+   * The matrix and the task cards label an owner "gugur R3" when the engine
+   * assigned them as a best-effort fallback (`isEligible: false`), but the export
+   * had no field for that verdict, so the same member was written to the CSV as
+   * an ordinary "Penanggung Jawab". A reader of the export then saw a valid
+   * assignment where the screen said the rules were not met.
+   *
+   * Optional so existing callers keep compiling; when it is absent the export
+   * writes the empty string rather than claiming either verdict.
+   */
+  eligibility?: ExportEligibility;
 }
+
+/** The two verdicts the export can state, plus "not recorded". */
+export type ExportEligibility = 'layak' | 'tidak layak';
+
+/** CSV header text for the eligibility column, in the export's own order. */
+export const ELIGIBILITY_HEADER = 'Kelayakan';
 
 export const EXPORT_HEADER = [
   'Tugas',
@@ -353,6 +372,7 @@ export const EXPORT_HEADER = [
   'Effort',
   'Penanggung Jawab',
   'Alternatif',
+  'Kelayakan',
   'Total',
   'K',
   'S',
@@ -381,6 +401,7 @@ export function toCsv(rows: ExportRow[]): string {
         String(row.effort),
         row.primary,
         row.alternative,
+        row.eligibility ?? '',
         row.total,
         row.K,
         row.S,
@@ -413,10 +434,29 @@ export function toPlainText(
   const split = `K ${weightPercent(meta.weights.K)}% / S ${weightPercent(meta.weights.S)}% / C ${weightPercent(meta.weights.C)}% / M ${weightPercent(meta.weights.M)}%`;
   const mode = meta.isFallback ? `Cadangan (${split})` : `Hybrid (${split})`;
 
-  const assignmentLines = rows.map(
-    (r) =>
-      `${r.task} | ${r.primary}${r.alternative ? ` | alternatif: ${r.alternative}` : ''} | ${r.total}% | K ${r.K} S ${r.S} C ${r.C} M ${r.M} | ${r.locked === 'ya' ? 'terkunci' : 'bebas'}`
-  );
+  /*
+   * T-FINAL-QA-01: an owner the rules did not actually qualify is marked in the
+   * line itself. The card and the matrix already say "gugur R3"; a copied
+   * summary that only printed the name made the same assignment look valid.
+   */
+  const assignmentLines = rows.map((r) => {
+    const verdict = r.eligibility === 'tidak layak' ? ' | TIDAK LAYAK (lihat alasan)' : '';
+    return `${r.task} | ${r.primary}${r.alternative ? ` | alternatif: ${r.alternative}` : ''}${verdict} | ${r.total}% | K ${r.K} S ${r.S} C ${r.C} M ${r.M} | ${r.locked === 'ya' ? 'terkunci' : 'bebas'}`;
+  });
+
+  const ineligibleCount = rows.filter((r) => r.eligibility === 'tidak layak').length;
+  const unassignedCount = rows.filter((r) => r.primary === '').length;
+  const verdictLines: string[] = [];
+  if (unassignedCount > 0) {
+    verdictLines.push(
+      `${unassignedCount} tugas tanpa penanggung jawab: tidak ada kandidat yang memenuhi aturan (lihat alasan tiap tugas).`
+    );
+  }
+  if (ineligibleCount > 0) {
+    verdictLines.push(
+      `${ineligibleCount} tugas memakai saran terbaik yang belum memenuhi aturan (R3); bukan penugasan final.`
+    );
+  }
 
   const loadLines = meta.loads.map(
     (l) => `${l.name}: ${l.load} jam dari ${l.capacity} jam${l.over ? ' (melewati batas)' : ''}`
@@ -430,6 +470,7 @@ export function toPlainText(
     'PENUGASAN',
     ...assignmentLines,
     '',
+    ...(verdictLines.length > 0 ? ['CATATAN KELAYAKAN', ...verdictLines, ''] : []),
     'BEBAN ANGGOTA',
     ...loadLines,
   ].join('\n');

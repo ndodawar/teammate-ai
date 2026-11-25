@@ -393,6 +393,15 @@ export interface TaskCardData {
   task: Task;
   ownerName: string | null;
   ownerScore: number | null;
+  /**
+   * The engine's verdict for `ownerName` (`CandidateScore.isEligible`).
+   *
+   * `null` when there is no owner. This is what lets the card refuse to present
+   * an R3 best-effort owner as an ordinary one: the engine assigned them, but the
+   * rules were not met, so the label says so right next to the name instead of
+   * only in a note at the bottom of the card.
+   */
+  ownerIsEligible?: boolean | null;
   alternativeName: string | null;
   alternativeScore: number | null;
   /** Engine warnings for this task, verbatim. */
@@ -419,8 +428,14 @@ export function TaskRecommendationCard({
   /** The score disclosure and anything else the caller attaches. */
   children?: React.ReactNode;
 }) {
-  const { task, ownerName, ownerScore, alternativeName, alternativeScore, warnings } = data;
+  const { task, ownerName, ownerScore, ownerIsEligible, alternativeName, alternativeScore, warnings } = data;
   const isAllocated = ownerName !== null;
+  /*
+   * T-FINAL-QA-01: an owner the engine assigned as a best-effort R3 fallback has
+   * `isEligible: false`. The card must not print that name as if the rules were
+   * satisfied, so the verdict travels with the name.
+   */
+  const ownerUnqualified = isAllocated && ownerIsEligible === false;
   const impossible = warnings.find((w) => w.code === 'r2_no_candidate' && w.detail?.exceedsCapAlone);
   const r3Warning = warnings.find((w) => w.code === 'r3_no_candidate');
 
@@ -453,6 +468,19 @@ export function TaskRecommendationCard({
           ) : (
             <p className="mt-0.5 text-[12px] font-semibold text-danger">
               Tidak layak dialokasikan
+            </p>
+          )}
+          {/*
+            The verdict sits directly under the name, not only in the note at the
+            bottom. A reader who stops after the first line still learns that this
+            name is a suggestion, not a qualified assignment.
+          */}
+          {ownerUnqualified && (
+            <p
+              className="mt-1 text-[10.5px] font-semibold leading-snug text-warn"
+              data-testid={`card-owner-unqualified-${task.id}`}
+            >
+              Belum memenuhi aturan: saran terbaik, bukan penugasan final
             </p>
           )}
         </div>

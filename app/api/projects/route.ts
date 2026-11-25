@@ -3,8 +3,22 @@ import { projectSchema } from '@/lib/validation';
 import { getSupabaseClient, generateProjectCode } from '@/lib/db/project';
 
 export async function POST(request: Request) {
+  /*
+   * T-FINAL-QA-01: a body that is not JSON is a client error, not a server one.
+   *
+   * `request.json()` throws on malformed input, and the outer catch turned that
+   * into a 500 "Internal server error". Every sibling route (members, tasks,
+   * events) already answers 400 with a readable sentence, so the browser showed
+   * a server fault for a mistake the user can fix by retrying the form.
+   */
+  let body: unknown;
   try {
-    const body = await request.json();
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: 'Body request harus berupa JSON.' }, { status: 400 });
+  }
+
+  try {
     const parsed = projectSchema.safeParse(body);
 
     if (!parsed.success) {

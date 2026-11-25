@@ -68,3 +68,42 @@ export const projectSchema = z.object({
 });
 
 export const projectCodeSchema = z.string().regex(/^[0-9a-f]{24}$/, 'Invalid project code');
+
+/**
+ * T-FINAL-QA-01: the four K/S/C/M weights a caller may send with a
+ * recommendation request (FR-10).
+ *
+ * `/api/recommend` previously forwarded `weights` from the request body straight
+ * into `globalAssign`. A body of `{"K": NaN}` or `{"K": 0.8, "S": 0.8, ...}`
+ * therefore produced a NaN score or a total above 100%, and the PRD invariant
+ * "bobot berjumlah 100%" was enforced only by the client slider.
+ *
+ * Each weight is a finite number in [0, 1] and the four must sum to 1 within a
+ * small tolerance, because the sliders redistribute to an exact 1.00 and only
+ * floating-point drift can exceed it. Nothing here changes the weights
+ * themselves: an invalid set is rejected, never silently corrected, so the
+ * caller cannot believe a score was produced with weights it did not ask for.
+ */
+const WEIGHT_TOLERANCE = 1e-6;
+
+export const weightsSchema = z
+  .object({
+    K: z.number().min(0).max(1),
+    S: z.number().min(0).max(1),
+    C: z.number().min(0).max(1),
+    M: z.number().min(0).max(1),
+  })
+  .refine(
+    (w) => Math.abs(w.K + w.S + w.C + w.M - 1) <= WEIGHT_TOLERANCE,
+    'Total bobot K, S, C, dan M harus 100%.'
+  );
+
+/**
+ * The recommendation request body. `weights` is optional so an older client that
+ * sends only `code` keeps working: the engine then applies its own defaults.
+ */
+export const recommendRequestSchema = z.object({
+  code: z.string().min(1, 'Kode proyek wajib diisi.'),
+  weights: weightsSchema.optional(),
+  isFallback: z.boolean().optional(),
+});
