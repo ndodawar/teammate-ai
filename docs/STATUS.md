@@ -4841,3 +4841,526 @@ sesudah: PUT skills [Python=5] → 200 + warnings[0] menyebut "Python" dan dafta
 ```
 
 **Yang tidak diperbaiki dan tetap tercatat:** K-2(a) kapasitas 0 masih tidak dapat disimpan, jadi skenario S09/S19 tetap hanya dapat dibuat lewat fixture. Skill bebas di luar taksonomi tetap tersimpan apa adanya; peringatan hanya memberi tahu, tidak mengonversi, dan tidak ada pemetaan sinonim yang dikarang.
+
+---
+
+## MASTER-MATRIX-HARDENING-01 — Fase 2
+
+Status: **Lulus bersyarat**
+
+Lulus karena rumus K, S, C, M sesuai PRD dan contoh penerimaan 8.4 direproduksi persis, dengan 26 tes baru. Bersyarat karena satu temuan struktural (F2-01) sengaja tidak diperbaiki: memperbaikinya berarti mengubah C untuk semua anggota atau mengubah signature publik, dan keduanya butuh keputusan pengguna.
+
+### 1. Temuan
+
+**F2-01 — `idealLoad` adalah parameter yang tidak pernah dipakai.**
+
+`lib/scoring/score.ts:66` mendeklarasikan `idealLoad`, tetapi badan fungsi tidak membacanya sama sekali. `computeCapacity` (`lib/scoring/score.ts:24-29`) hanya menerima `member.capacity`. Akibatnya C = 1 − (load + effort) / **kapasitas anggota**, bukan dibagi 1,25 × beban ideal.
+
+Ini **bukan bug yang bertentangan dengan PRD**, karena contoh penerimaan PRD 8.4 sendiri memakai kapasitas anggota (7) sebagai pembagi dan mengharapkan C = 2/7 = 0.2857. Jadi teks PRD "C = 1 - (Current Load + Task Effort) / Load Limit" harus dibaca sebagai kapasitas anggota, dan begitulah kode bekerja. Yang bermasalah adalah **parameter yang menyesatkan**: ia terlihat seperti masukan penting bagi C padahal tidak berpengaruh. Ini jebakan bagi pembaca berikutnya.
+
+Dampak: tidak ada salah hitung. Risikonya adalah kesalahan di masa depan, bila seseorang mengira sudah mengubah C dengan mengubah `idealLoad`.
+
+**F2-02 — `K(NaN)` menghasilkan `total: NaN`.** Diperbaiki.
+
+`normalizeCosineSimilarity` sebelum perbaikan meneruskan NaN, lalu `0.4 × NaN` menyebar ke seluruh penjumlahan sehingga `total` menjadi NaN dan setiap perbandingan skor menjadi false. Matriks akan menampilkan "NaN%" dan tugas kehilangan pemilik tanpa penjelasan.
+
+Jalur produksi saat ini **tidak dapat** menghasilkan NaN: `isValidEmbeddingValues` (`lib/ai/embedding-cache.ts:11-18`) menolak vektor yang bukan 768 angka finite, dan `cosineSimilarity` mengembalikan 0 untuk vektor nol. Jadi ini penjaga pada kontrak fungsi yang diekspor, bukan bug yang sedang menggigit pengguna. Tetap diperbaiki karena biayanya satu perbandingan.
+
+**Yang diverifikasi benar dan tidak diubah:**
+
+| Komponen | Rumus PRD | Hasil verifikasi |
+|---|---|---|
+| K | clamp((cosine − 0,2)/0,6, 0, 1) | Cocok; 0,2→0, 0,5→0,5, 0,65→0,75, 0,8→1 |
+| S | rata-rata level / 5 | Cocok; skill tidak dimiliki = 0, tidak ada level yang dikarang |
+| C | 1 − (load + effort)/limit | Cocok dengan 8.4; dijepit ke 0, tidak pernah negatif |
+| M | (rata-rata minat − 1)/4 | Cocok; minat kosong = 3 → 0,5; tugas tanpa skill = 1 |
+| Bobot | 40/30/20/10 | Cocok; cadangan 0/50/33/17 dengan K dihilangkan |
+
+### 2. Perubahan
+
+Tiga file:
+
+1. `lib/scoring/score.ts` — penjaga NaN pada `normalizeCosineSimilarity`, dengan komentar yang menjelaskan mengapa hanya NaN (bukan Infinity) dan mengapa jalur produksi belum dapat menghasilkannya.
+2. `test/scoring/hardening-01-fase-2.test.ts` (baru, 26 tes).
+3. `docs/STATUS.md` — bagian ini.
+
+### 3. Pengujian
+
+```
+npx vitest run test/scoring/hardening-01-fase-2.test.ts → 26 passed (26)
+npx vitest run                                          → 38 file lulus, 1 dilewati
+                                                          668 tes lulus, 7 dilewati
+npm run typecheck                                       → 0 error
+npm run lint                                            → 0 error, 26 warning
+npm run build                                           → sukses
+```
+
+Baseline Fase 0: 602 tes. Sesudah Fase 1: 642. Sesudah Fase 2: 668. Tidak ada tes lama dihapus.
+
+### 4. Regression
+
+- Perilaku berubah: hanya `K(NaN)`, dari NaN menjadi 0. Tidak ada jalur produksi yang menghasilkannya, jadi tidak ada hasil pengguna yang bergeser.
+- Perilaku tetap: seluruh 642 tes sebelumnya lulus tanpa perubahan.
+- Risiko tersisa: F2-01 (parameter `idealLoad` menyesatkan) masih terbuka.
+
+### 5. Bukti
+
+Probe sebelum perbaikan:
+
+```
+C (load=2, effort=3, capacity=7) = 0.2857142857142857   -> 2/7, pembagi = capacity
+C (load=4, effort=5, capacity=5) = 0                    -> raw -0.8 dijepit
+C (capacity 0)                   = 0
+S with no required skills        = 1
+M with no required skills        = 1
+M with interests undefined        = 0.5                  -> default 3
+K(NaN)                            = NaN                  <- BUG
+total all-max                     = 0.96
+```
+
+Probe sesudah perbaikan:
+
+```
+K = 0 | total = 0.56            (NaN kini 0; total = 0.3(1)+0.2(0.8)+0.1(1))
+undefined -> default 0.5 -> total = 0.76
+```
+
+Kontras yang membuktikan angka 8.4 dihitung tangan, bukan disalin:
+
+```
+Ani  K=0.8000 S=1.0000 C=0.2857 M=0.7500 total=0.7521
+Budi K=0.5500 S=0.5000 C=0.5714 M=0.5000 total=0.5343
+```
+
+### 6. Gerbang
+
+Fase 3 (aturan R1–R5 dan penugasan global) **boleh dimulai**. Gerbang Fase 2 terpenuhi: contoh 8.4 lolos, dan setiap komponen dibandingkan dengan perhitungan manual.
+
+### 7. Keputusan pengguna
+
+**K-5 — F2-01, parameter `idealLoad` yang tidak dipakai.** Pilih satu:
+(a) Biarkan apa adanya, dan cukup catat di komentar bahwa C memakai kapasitas anggota sesuai 8.4. Tes sudah mematok perilaku ini.
+(b) Hapus parameter dari signature `computeScore` dan sesuaikan `assign.ts` serta tes. Perubahan mekanis, tidak mengubah satu pun angka skor.
+(c) Ubah C agar benar-benar memakai 1,25 × beban ideal. **Ini akan mengubah setiap skor dan bertentangan dengan angka 8.4**, jadi saya tidak menyarankannya tanpa keputusan eksplisit Anda.
+
+### Catatan kejujuran: satu kegagalan yang tidak dapat direproduksi
+
+Sesudah menulis laporan di atas, satu kali `npx vitest run` melaporkan:
+
+```
+Test Files  1 failed | 37 passed | 1 skipped (39)
+Tests       1 failed | 667 passed | 7 skipped (675)
+```
+
+Perintah itu menggabungkan `git status --short` dan `npx vitest run` dalam satu pemanggilan, dan keluarannya diambil potongan sehingga **nama tes yang gagal tidak sempat terekam**. Saya tidak dapat menyebut tes mana yang gagal, dan karena itu tidak dapat menyebut penyebabnya.
+
+Yang sudah dilakukan untuk mengejar:
+
+- Sembilan kali `npx vitest run` berturut-turut: 668 lulus, 0 gagal.
+- Dua belas kali tambahan dengan penangkap kegagalan eksplisit: 0 gagal.
+- Empat berkas yang paling mungkin terdampak (`hardening-01-fase-2`, `numerical_8_4`, `scoring`, `pipeline`) dijalankan terpisah: semuanya lulus.
+- Pemanggilan gabungan yang identik dengan yang sempat gagal: lulus.
+- Pencarian sumber ketidakstabilan: tidak ada `Date.now()`, `Math.random()`, atau `performance.now()` di tes non-live, dan tidak ada asersi waktu.
+
+Kesimpulan yang jujur: **kegagalan itu tidak dapat direproduksi dan penyebabnya belum diketahui.** Saya tidak menyatakannya sebagai fluke, dan tidak menyatakannya sudah diperbaiki. Bila muncul lagi, tangkap keluarannya utuh (`npx vitest run > /tmp/run.log 2>&1`) lalu baca nama tesnya sebelum melakukan apa pun. Kemungkinan besar penyebabnya ada di salah satu dari dua tempat: asersi `toEqual` pada objek skor di tes F2-01 (peka terhadap perubahan urutan kunci bila kode berubah), atau interaksi antarberkas yang memakai modul `lib/scoring` bersama.
+
+Angka yang saya laporkan sebagai hasil akhir Fase 2 adalah dari 21 kali jalannya yang bersih: **668 lulus, 7 dilewati**.
+
+---
+
+## MASTER-MATRIX-HARDENING-01 — Fase 3
+
+Status: **Lulus**
+
+R1 sampai R5 dan penugasan global diverifikasi terhadap PRD v0.3, termasuk empat kasus keputusan S21-S24 yang sebelumnya tidak punya tes bernomor. 24 tes baru. Tidak ada kode mesin yang diubah di fase ini: seluruh perilaku sudah benar, dan setiap kegagalan tes ternyata aritmetika tes saya sendiri.
+
+### 1. Temuan
+
+**F3-01 — S21-S24 tidak ada sebagai tes bernomor.** `test/scoring/fixtures/scenarios.ts` hanya berisi 20 skenario (S01-S20). Empat keputusan pengguna v0.3 di §7.7.2 tidak pernah dikunci. Sekarang dikunci: S21 (tidak ada kandidat R2 -> tanpa penanggung jawab), S22 (tidak ada yang memenuhi R3 -> saran terbaik + peringatan, tidak dianggap layak), S23 (R5 menang atas R2 tetapi overload dilaporkan), S24 (dijaga lewat invarian lintas aturan).
+
+**F3-02 — dua kegagalan tes adalah aritmetika saya, bukan bug mesin.** Dicatat karena polanya berulang di setiap fase:
+- S07/S22: saya memakai 2 anggota + 1 tugas 2 jam. Ideal = 2/2 = 1, batas = 1,25, sehingga tugas 2 jam **mustahil** dipasang siapa pun. Yang teruji jadi R2, bukan R3. Diperbaiki jadi 4 anggota + 4 tugas x 2 jam (ideal 2, batas 2,5).
+- S11: saya menegaskan A menerima 2 jam. Ideal 1, batas 1,25, jadi 2 jam **melanggar R2** dan mesin benar menolaknya. Ekspektasi saya yang salah.
+
+Mesin tidak diubah untuk membuat tes lulus. Yang diubah adalah angka di dalam tes.
+
+**Yang diverifikasi benar dan tidak diubah:**
+
+| Aturan | PRD | Hasil |
+|---|---|---|
+| R1 | kapasitas 0 keluar dari kandidat | Cocok; kapasitas negatif juga ditolak, dan pembagi beban ideal hanya anggota yang lolos R1 |
+| R2 | beban <= 1,25 x ideal, presisi penuh | Cocok; tepat di batas diterima, 0,0001 di atasnya ditolak, tanpa pembulatan |
+| R3 | minimal SATU skill wajib level >= 3 | Cocok; anggota dengan 1 dari 2 skill tetap kandidat |
+| R4 | tepat satu penanggung jawab | Cocok; nol pemilik saat tidak ada kandidat R2 bukan pelanggaran R4 |
+| R5 | tugas terkunci tidak berubah | Cocok; menang atas R2 dan overload dilaporkan, bukan disembunyikan |
+
+### 2. Perubahan
+
+Dua file:
+
+1. `test/scoring/hardening-01-fase-3.test.ts` (baru, 24 tes).
+2. `docs/STATUS.md` — bagian ini.
+
+### 3. Pengujian
+
+```
+npx vitest run test/scoring/hardening-01-fase-3.test.ts → 24 passed (24)
+npx vitest run                                          → 39 file lulus, 1 dilewati
+                                                          692 tes lulus, 7 dilewati
+npm run typecheck                                       → 0 error
+npm run lint                                            → 0 error, 26 warning
+npm run build                                           → sukses
+```
+
+Satu warning lint sempat muncul dari variabel tak terpakai di tes baru (26 -> 27). Saya hapus variabelnya, bukan menonaktifkan aturannya; kembali 26.
+
+### 4. Regression
+
+- Perilaku berubah: tidak ada. Fase ini hanya menambah tes.
+- 668 tes sebelumnya lulus tanpa perubahan.
+
+### 5. Bukti
+
+```
+S07/S22 (4 anggota L2, 4 tugas 2 jam): ideal 2, batas 2,5
+  -> semua tugas terisi saran terbaik, SEMUA sel isEligible=false,
+     S=0,4 (level 2/5, tidak dinaikkan), peringatan r3_no_candidate
+
+S11 (A L3 cosine 0,2 | B L1 cosine 0,8): ideal 1, batas 1,25
+  -> primary A (bukan B), B isEligible=false, skor B > skor A,
+     beban B = 0, beban A = 1 (tugas kedua akan melanggar R2)
+
+S23 (t1 terkunci 9 jam pada A, ideal 5, batas 6,25)
+  -> primary tetap A, isLocked=true, peringatan r2_locked_overload, beban A = 9
+
+S08/S21 (8 anggota, 4 tugas 2 jam, batas 1,25)
+  -> semua primaryMemberId = '', semua beban 0, peringatan r2_no_candidate
+     detail {taskHours:2, idealLoad:1, capHours:1.25, exceedsCapAlone:true}
+```
+
+### 6. Gerbang
+
+Fase 4 (lapisan AI dan fallback) **boleh dimulai**.
+
+### 7. Keputusan pengguna
+
+Tidak ada keputusan baru yang dibutuhkan di fase ini. K-5 (parameter `idealLoad` di `computeScore`) masih terbuka dari Fase 2.
+
+---
+
+## MASTER-MATRIX-HARDENING-01 — Fase 4
+
+Status: **Lulus**
+
+Lapisan AI dan jalur cadangan diverifikasi dengan 15 tes baru. Seluruh provider dimock: tidak ada panggilan jaringan, tidak ada API key yang dibutuhkan. Tidak ada kode produksi yang diubah.
+
+### 1. Temuan
+
+**F4-01 — anggaran 3 panggilan adalah penjaga nyata, bukan sekadar angka di tes.** `AiRun.track` (`lib/ai/call-budget.ts:79-112`) memeriksa hitungan **sebelum** memanggil provider, sehingga panggilan keempat tidak pernah sampai ke jaringan. Tes Fase 4 membuktikannya dengan menghitung berapa kali fungsi provider benar-benar dipanggil (3, bukan 4), bukan hanya memeriksa `callCount`.
+
+Dua sifat yang baik dan saya kunci:
+- Panggilan yang **gagal** tetap dihitung. Permintaannya sudah terkirim, jadi mengulanginya harus memakai jatah baru.
+- `finish()` mengembalikan `null` pada pemanggilan kedua, sehingga satu proses tidak bisa menulis dua baris `ai_runs`.
+
+**F4-02 — mode cadangan benar-benar offline.** `explainAssignments` keluar lebih awal ketika `isFallback` true (`lib/ai/explain.ts:153-155`), dan skor cadangan memberi K = 0. Tes membuktikan dua hal terpisah: `callCount` tetap 0, **dan** mengubah cosine dari 0 ke 1 tidak menggeser satu pun total skor. Yang kedua penting — tanpa itu, klaim "tanpa AI" bisa benar secara hitungan panggilan tetapi salah secara perilaku.
+
+**F4-03 — `reason` hidup per sel, bukan per tugas.** Dua tes awal saya gagal karena menegaskan `assignment.reason`; bentuk sebenarnya adalah `assignment.scores[memberId].reason` (`lib/scoring/types.ts:74`, `applyReasons` di `explain.ts:37-52`). Aritmetika/bentuk tes saya yang salah, bukan kodenya. Diperbaiki di tes.
+
+**F4-04 — interaksi lokal tanpa AI, dibuktikan dua cara.**
+- Perilaku: slider, kunci, dan tukar dijalankan sambil `globalThis.fetch` diganti spy — nol panggilan.
+- Struktur: `lib/scoring/assign.ts` diperiksa tidak mengimpor `lib/ai` sama sekali. Ini menjaga klaim tetap benar bila nanti ada yang menambah impor.
+
+**F4-05 — kebocoran kunci API ditutup.** `sanitizeErrorMessage` menyamarkan bentuk `AIza...`, `key=...`, dan `api_key...`, lalu memotong ke 500 karakter. Ini terverifikasi, bukan diasumsikan.
+
+**Yang sudah tercakup tes lama dan tidak diduplikasi:** degradasi ke mode cadangan di tingkat rute (`test/api/recommend-route.test.ts`: embedding gagal -> baris `fallback`, penjelasan melempar -> rekomendasi tetap terpakai, DB mati -> galat tetap fatal), dan bobot cadangan di `test/scoring/fallback.test.ts`.
+
+### 2. Perubahan
+
+Dua file:
+
+1. `test/ai/hardening-01-fase-4.test.ts` (baru, 15 tes).
+2. `docs/STATUS.md` — bagian ini.
+
+### 3. Pengujian
+
+```
+npx vitest run test/ai/hardening-01-fase-4.test.ts → 15 passed (15)
+npx vitest run                                    → 40 file lulus, 1 dilewati
+                                                    707 tes lulus, 7 dilewati
+npm run typecheck                                 → 0 error
+npm run lint                                      → 0 error, 26 warning
+npm run build                                     → sukses
+```
+
+### 4. Regression
+
+- Perilaku berubah: tidak ada. Fase ini hanya menambah tes.
+- 692 tes sebelumnya lulus tanpa perubahan.
+
+### 5. Bukti
+
+```
+Batas anggaran:   3 panggilan diterima, provider dipanggil 3x
+                  percobaan ke-4 -> CallBudgetExceededError, provider TETAP 3x
+Panggilan gagal:  callCount 1, remaining 2   (jatah terpakai walau gagal)
+finish() kedua:   null                        (tidak ada baris ganda)
+Mode cadangan:    callCount 0; alasan templat ada di setiap sel
+                  cosine 0 -> 1 tidak mengubah total apa pun; K = 0 di semua sel
+Slider/tukar/kunci: fetch spy = 0 panggilan
+assign.ts:        tidak ada impor lib/ai
+Sanitasi kunci:   AIza... / key=... / api_key... -> [REDACTED]; pesan 5000 char -> 500
+```
+
+### 6. Gerbang
+
+Fase 5 (integritas sinkronisasi dan invalidasi cache) **boleh dimulai**.
+
+### 7. Keputusan pengguna
+
+Tidak ada keputusan baru. K-5 (parameter `idealLoad`) masih terbuka dari Fase 2.
+
+---
+
+## MASTER-MATRIX-HARDENING-01 — Fase 5
+
+Status: **Lulus**
+
+Integritas sinkronisasi dan invalidasi cache diverifikasi dengan 17 tes baru. Tidak ada migrasi, tidak ada perubahan skema, tidak ada kode produksi yang diubah.
+
+### 1. Temuan
+
+**F5-01 — invalidasi cache bekerja dengan kunci, bukan dengan pembersihan.** Kunci adalah `sha256(model + ':' + teks)`. Karena model dan teks sama-sama masuk kunci, mengubah teks (bahkan satu spasi atau huruf besar/kecil) atau mengganti model otomatis menghasilkan kunci baru, sehingga entri lama tidak pernah ditemukan lagi. Ini berarti tidak ada TTL, tidak ada job purge, dan tidak ada migrasi yang dibutuhkan untuk invalidasi. Dikunci oleh tes.
+
+**F5-02 — perubahan level skill membatalkan embedding anggota.** `formatMemberText` memuat nama, level skill, dan minat, sehingga menaikkan level skill mengubah teks dan kunci. Tanpa sifat ini, profil yang diperbarui akan terus memakai vektor lama dan K menjadi bohong. Diverifikasi langsung.
+
+**F5-03 — baris cache rusak diperlakukan sebagai cache miss, bukan vektor karangan.** `parseEmbedding` menolak dimensi salah, NaN, Infinity, literal kosong, dan bentuk cacat — semuanya `null`, yang memicu perhitungan ulang. `isValidEmbeddingValues` juga menjaga `setCachedEmbedding` agar tidak menulis vektor yang tidak muat di kolom.
+
+**F5-04 — embedding yang gagal tidak diganti 0.** `computeTaskMemberCosineMap` mencatat pasangan gagal di `failedPairs`, tidak menulis angka ke `cosineMap`, dan menandai `isEmbeddingFailed`. Ini penting: nilai 0 karangan akan tampak seperti "sama sekali tidak mirip" dan merusak peringkat tanpa jejak. Rute lalu menurunkan mode ke cadangan.
+
+**F5-05 — hasil basi dicegah oleh perhitungan ulang, bukan oleh cache hasil.** `globalAssign` selalu menghitung `idealLoad` dari komposisi terkini. Tes membuktikan kelayakan bisa berubah arah tanpa satu pun skor komponen berubah: menghapus satu tugas mengubah ideal dari 1 menjadi 0,5 sehingga tugas yang tadinya muat menjadi tidak muat.
+
+**F5-06 — dua kesalahan aritmetika saya, bukan bug mesin.**
+- Saya mengharapkan 3 tugas x 1 jam terpasang pada 2 anggota. Ideal 1,5, batas 1,875, sehingga satu anggota hanya bisa menerima **satu** tugas (2 jam > 1,875). Mesin benar memasang 2 dari 3.
+- Saya memberi peta cosine berkunci 4 anggota pada pemanggilan dengan 2 anggota, dan mesin melempar "Embedding missing". Itu perilaku yang **benar**: peta yang tidak cocok dengan roster harus gagal keras, bukan diam-diam dianggap 0.
+
+Keduanya diperbaiki di tes; mesin tidak disentuh.
+
+### 2. Perubahan
+
+Dua file:
+
+1. `test/ai/hardening-01-fase-5.test.ts` (baru, 17 tes).
+2. `docs/STATUS.md` — bagian ini.
+
+### 3. Pengujian
+
+```
+npx vitest run test/ai/hardening-01-fase-5.test.ts → 17 passed (17)
+npx vitest run                                    → 41 file lulus, 1 dilewati
+                                                    724 tes lulus, 7 dilewati
+npm run typecheck                                 → 0 error
+npm run lint                                      → 0 error, 26 warning
+npm run build                                     → sukses
+```
+
+### 4. Regression
+
+- Perilaku berubah: tidak ada. Fase ini hanya menambah tes.
+- 707 tes sebelumnya lulus tanpa perubahan.
+- Cache tetap dipakai (tidak dilepas), sesuai batasan tugas.
+
+### 5. Bukti
+
+```
+kunci cache:  "Menulis bab 2" vs "Menulis bab 3"      -> kunci berbeda
+              "Tugas A" vs "Tugas  A" (spasi ganda)   -> kunci berbeda
+              model A vs model B                      -> kunci berbeda
+              sha256 heksadesimal 64 karakter, stabil
+baris rusak:  dimensi 10 / NaN / Infinity / "[]" / "" / null -> null (cache miss)
+round-trip:   serialize -> parse, drift < 1e-5 (float4)
+teks tugas:   judul + deskripsi + skill semuanya hadir; beda deskripsi -> kunci beda
+teks anggota: level skill + minat hadir; level 2 vs 5 -> kunci beda
+embedding:    2 tugas x 3 anggota -> 6 pasangan lengkap, vektor identik -> cosine 1
+              satu gagal -> isEmbeddingFailed true, failedPairs ['t1:a'], peta tanpa nilai karangan
+komposisi:    2 tugas -> ideal 1, semua muat; hapus 1 -> ideal 0,5, tugas tidak muat
+              3 tugas, 2 anggota -> 2 terpasang (2 jam > batas 1,875)
+              3 tugas, 4 anggota -> ideal 0,75, batas 0,9375, tidak ada yang muat
+```
+
+### 6. Gerbang
+
+Fase 6 (integritas UI dan matriks) **boleh dimulai**.
+
+### 7. Keputusan pengguna
+
+Tidak ada keputusan baru. K-5 (parameter `idealLoad`) masih terbuka dari Fase 2.
+
+---
+
+## MASTER-MATRIX-HARDENING-01 — Fase 6
+
+Status: **Lulus**
+
+Integritas UI dan matriks diverifikasi dengan 17 tes baru. Tidak ada redesain, tidak ada markup yang diubah, dan setiap `data-testid` yang ada tetap utuh. Tes memakai fungsi murni yang benar-benar dipakai komponen, dijalankan terhadap `globalAssign` sungguhan.
+
+### 1. Temuan
+
+**F6-01 — ringkasan mengambil angka dari hasil mesin, bukan menghitung ulang.** `summarise` memakai `result.assignments` dan `result.memberLoads` apa adanya. Tes membandingkannya langsung dengan hasil `globalAssign` yang sama: `assigned` sama dengan jumlah pemilik, `needsAttention` adalah sisa pengurangan yang sama (`assigned + needsAttention === totalTasks`), dan `capHours` = `idealLoad × 1,25`. Tidak ada angka yang dihitung dengan rumus kedua.
+
+**F6-02 — fallback R3 tampil sebagai "perlu penyesuaian", bukan "sudah dibagikan".** Ini titik paling rawan: mesin memberi saran terbaik meski tak ada yang memenuhi R3, sehingga tugas *punya* pemilik. Bila kartu hanya memeriksa "ada pemilik?", pengguna akan melihat tugas bermasalah sebagai beres. `taskCardStatus` memeriksa `ownerIsEligible` lebih dulu, dan tes mengunci bahwa pemilik fallback -> `perlu-penyesuaian`.
+
+**F6-03 — batas nol tidak pernah dilaporkan aman.** `loadStanding(5, 0)` mengembalikan `melebihi-batas`, bukan `dalam-batas`. Batas 0 berarti mesin tidak dapat menurunkan limit (misalnya roster kosong atau semua anggota berkapasitas 0); menampilkannya aman akan menyembunyikan masalah nyata.
+
+**F6-04 — ekspor menolak mengarang nama pemilik.** Untuk tugas yang tidak terpasang, kolom pemilik berisi string kosong. CSV mengutip setiap kolom (perlindungan injeksi rumus), jadi bentuknya `""` — dan yang penting adalah isinya kosong, bukan nama siapa pun.
+
+**F6-05 — `toPlainText` wajib menerima bobot yang benar-benar dipakai.** Ini temuan yang membuat satu tes saya gagal: fungsi memerlukan `meta.weights` dan sengaja mencetak bobot aktual, bukan header tetap. Komentar di kode menjelaskan alasannya: header "S 0,50 / C 0,33 / M 0,17" yang dicetak tetap setelah slider digeser membuat file ekspor bertentangan dengan angkanya sendiri. Perilaku ini benar; tes saya yang belum memberi `meta`.
+
+**Tiga kesalahan saya, bukan bug:** memakai `RULE_CODES` yang tidak ada; mengarang bentuk `ExportRow` (aslinya `task`/`hours`/`effort`/`primary`/`K`…); dan mengira kolom CSV kosong tampil sebagai `''`. Semuanya diperbaiki di tes setelah membaca tipe sebenarnya.
+
+**Yang tidak dapat diverifikasi:** pemeriksaan visual di browser (tidak ada Playwright/Puppeteer/jsdom; `/usr/bin/firefox` adalah snap rusak). Fase ini memverifikasi **logika** yang memberi makan UI, bukan pikselnya. Ini keterbatasan yang jujur, bukan klaim bahwa tampilan sudah diperiksa mata.
+
+### 2. Perubahan
+
+Dua file:
+
+1. `test/ui/hardening-01-fase-6.test.ts` (baru, 17 tes).
+2. `docs/STATUS.md` — bagian ini.
+
+### 3. Pengujian
+
+```
+npx vitest run test/ui/hardening-01-fase-6.test.ts → 17 passed (17)
+npx vitest run                                   → 42 file lulus, 1 dilewati
+                                                   741 tes lulus, 7 dilewati
+npm run typecheck                                → 0 error
+npm run lint                                     → 0 error, 26 warning
+npm run build                                    → sukses
+```
+
+### 4. Regression
+
+- Perilaku berubah: tidak ada. Fase ini hanya menambah tes.
+- 724 tes sebelumnya lulus tanpa perubahan.
+- Tidak ada `data-testid` yang diubah atau dihapus.
+
+### 5. Bukti
+
+```
+ringkasan:  assigned + needsAttention === totalTasks
+            totalLoad = jumlah memberLoads (bukan jumlah ulang tugas)
+            capHours = idealLoad x 1,25, dari mesin
+            tidak ada tugas -> tidak ada pembagian nol, capHours finite
+status:     tanpa pemilik -> belum-dibagikan
+            pemilik fallback R3 (isEligible=false) -> perlu-penyesuaian
+            8 anggota / 4 tugas 2 jam -> semua tetap belum-dibagikan
+beban:      7,99/10 -> dalam-batas ; 8/10 -> mendekati ; 10/10 -> mendekati ; 10,01 -> melebihi
+            batas 0 dengan beban 5 -> melebihi-batas (tidak pernah "aman")
+aturan:     R1-R5 semua punya kalimat; tanpa simbol kode (<=, >=, *, /)
+komponen:   K/S/C/M semua punya nama biasa
+alasan:     hanya menyebut skill yang lolos ambang; tanpa itu -> "kandidat terbaik"
+ekspor:     CSV dan teks biasa menyebut pemilik yang sama dengan matriks
+            tugas tanpa pemilik -> kolom pemilik berisi kosong
+```
+
+### 6. Gerbang
+
+Fase 7 (20 skenario bernama dan gerbang akhir) **boleh dimulai**.
+
+### 7. Keputusan pengguna
+
+Tidak ada keputusan baru. K-5 (parameter `idealLoad`) masih terbuka dari Fase 2.
+
+---
+
+## MASTER-MATRIX-HARDENING-01 — Fase 7
+
+Status: **Lulus**
+
+24 tes skenario bernama (S01-S24) sesuai tabel PRD v0.3 §7.7.1 dan §7.7.2. Berbeda dari `test/scoring/scenarios.test.ts` yang memeriksa invarian umum, tes ini menegaskan **ekspektasi tertulis per skenario**.
+
+### 1. Temuan
+
+**F7-01 — `hasQualifiedMember` memindai seluruh roster tanpa melihat kapasitas.** Ini yang membuat S19 tidak menghasilkan peringatan R3, dan setelah ditelusuri perilakunya **benar**: R3 adalah aturan tentang **kemampuan**, R1 tentang **ketersediaan**. Anggota berkapasitas 0 tetap "memenuhi R3" secara skill, lalu dikeluarkan oleh R1. Dua aturan terpisah, bukan satu gabungan. Tes S19 sekarang menguji yang sebenarnya penting: anggota berkualitas itu tidak pernah menerima tugas, dan tidak ada anggota di bawah ambang yang ditandai layak.
+
+**F7-02 — peringatan R2 dapat menutupi R3 pada `warnings`.** Ketika tidak ada kandidat R2, tugas menghasilkan `r2_no_candidate`; peringatan `r3_no_candidate` hanya muncul bila R3 benar-benar tidak terpenuhi. Ini bukan bug, tetapi penting diketahui saat membaca antarmuka: pengguna melihat satu peringatan yang paling menentukan, bukan tumpukan.
+
+**F7-03 — tiga ekspektasi saya salah, mesin selalu benar.** Pola yang sama seperti fase-fase sebelumnya: S15 (`5 jam` pada roster 2 anggota -> batas 3,125, mustahil), S15 ulang (`"biasa"` hanya bisa 2 jam sehingga 3 dari 4 terpasang, bukan 4), dan S19 (R3 terpenuhi lewat anggota berkapasitas 0). Semua diperbaiki di tes dengan aritmetika yang ditulis di komentar.
+
+**F7-04 — 20 nama skenario sekarang terhubung ke PRD.** Sebelum fase ini, tabel §7.7.1 hanya ada di dokumen; sekarang setiap barisnya punya tes yang menyebut ekspektasinya. S21-S24 dari §7.7.2 juga terkunci.
+
+### 2. Perubahan
+
+Dua file:
+
+1. `test/scoring/hardening-01-fase-7.test.ts` (baru, 24 tes).
+2. `docs/STATUS.md` — bagian ini dan ringkasan kampanye di bawah.
+
+### 3. Pengujian
+
+```
+npx vitest run test/scoring/hardening-01-fase-7.test.ts → 24 passed (24)
+npx vitest run                                          → 43 file lulus, 1 dilewati
+                                                          765 tes lulus, 7 dilewati
+npm run typecheck                                       → 0 error
+npm run lint                                            → 0 error, 26 warning
+npm run build                                           → sukses, 12 rute (tidak berubah dari baseline)
+```
+
+### 4. Regression
+
+- Perilaku berubah: tidak ada. Fase ini hanya menambah tes.
+- 741 tes sebelumnya lulus tanpa perubahan.
+- Permukaan aplikasi tidak berubah: 12 rute, sama seperti Fase 0.
+
+### 5. Bukti
+
+```
+S01 skill merata             -> 4/4 terpasang, setiap anggota tepat 1 jam
+S02 satu sangat kuat         -> hanya A 1 jam, B/C 0, semua beban <= 1,25
+S03 kapasitas rendah         -> tugas 10 jam ke kapasitas 6 -> tanpa pemilik
+S04 kapasitas tinggi         -> tugas 20 jam diterima (kapasitas 1000 bukan pembatas)
+S05 minat berbeda            -> M 0 vs 1, skor tinggi menang
+S06 skill tidak cocok        -> r3_no_candidate, saran terbaik, tidak ada yang layak
+S07 semua di bawah level 3   -> r3_no_candidate
+S08 tidak ada kandidat R2    -> 0 terpasang, semua beban 0
+S09 jam nol                  -> R1 false, beban 0, ideal 1 (pembagi hanya yang lolos R1)
+S10 tugas 30 jam             -> tanpa pemilik
+S11 skill beragam            -> minimal SATU skill level 3 lolos, b tidak layak
+S12 tugas bersaing           -> A 2 jam, tidak melebihi 2,5
+S13 tugas terkunci           -> b tetap pemilik walau cosine a lebih tinggi
+S14 beban awal tak seimbang  -> ideal 2,5, A tetap 3 jam
+S15 skill+minat tinggi/kapasitas 1 -> A <= 1 jam, 3/4 terpasang
+S16 kapasitas rendah+multi   -> ideal 2, 2/2 terpasang, masing-masing 2 jam
+S17 kapasitas rendah+minat   -> ideal 1, minat tinggi menang tugas pertama
+S18 sangat kuat+bersaing     -> A 1 jam, tidak melebihi 1,25
+S19 jam nol+skill tak cocok  -> A 0 jam, ideal 2, A tak pernah dipakai
+S20 merata+beban awal        -> ideal 1,667, A tetap 2 jam, semua <= batas
+S21 tidak ada kandidat R2    -> semua tanpa pemilik
+S22 tidak ada kandidat R3    -> saran terbaik, semua isEligible=false
+S23 R5 menang atas R2        -> pemilik tetap, r2_locked_overload muncul
+S24 invarian gabungan        -> R1/R2/R3/R4 terpenuhi pada roster campuran
+```
+
+### 6. Gerbang akhir kampanye
+
+| Fase | Status | Tes ditambah | Total tes |
+|---|---|---|---|
+| 0 Baseline | Lulus | 0 | 602 |
+| 1 Validasi | Lulus bersyarat -> diterapkan | 40 | 642 |
+| 2 Mesin skor | Lulus bersyarat | 26 | 668 |
+| 3 R1-R5 + global | Lulus | 24 | 692 |
+| 4 Lapisan AI | Lulus | 15 | 707 |
+| 5 Sync + cache | Lulus | 17 | 724 |
+| 6 UI + matriks | Lulus | 17 | 741 |
+| 7 Skenario + akhir | Lulus | 24 | 765 |
+
+Semua gerbang akhir hijau: 765 lulus / 7 dilewati, typecheck 0, lint 0 error, build sukses.
+
+### 7. Temuan yang masih terbuka
+
+1. **K-5 — parameter `idealLoad` di `computeScore` tidak dipakai.** Menunggu keputusan pengguna (a/b/c). Tes F2-01 sudah mematok perilakunya.
+2. **S21-S24 tidak ada di fixture D2.** Sudah terkunci sebagai tes di Fase 3 dan 7, tetapi `test/scoring/fixtures/scenarios.ts` masih berisi S01-S20 saja.
+3. **Kapasitas 0 tidak dapat disimpan** (`capacity > 0` di Zod dan CHECK DB), sehingga S09/S19 hanya dapat dicapai lewat fixture. Ini keputusan K-2(a): dibiarkan.
+4. **Hierarki sub-tugas** membutuhkan `parent_task_id` + migrasi. Sengaja tidak dikerjakan (batasan: tanpa perubahan skema).
+5. **Verifikasi visual di browser tidak dapat dilakukan**: tidak ada Playwright/Puppeteer/jsdom, dan `/usr/bin/firefox` adalah snap rusak. Fase 6 memverifikasi logika yang memberi makan UI, bukan pikselnya.
+6. **Satu kegagalan penuh yang tidak dapat direproduksi** dari masa Fase 2, tercatat lengkap di bagian Catatan Kejujuran. Tidak muncul lagi di 11 putaran penuh berikutnya sepanjang Fase 3-7.
