@@ -515,6 +515,27 @@ export function compareSnapshots(
 }
 
 /** R2 as a sentence: uses the same rule the engine applies (1,25 × ideal). */
+/**
+ * Smallest number of equal parts that lets an over-cap task be placed.
+ *
+ * Returns null when no split can help, which is the case for a non-positive
+ * cap. Splitting does not change the total effort, so it does not change the
+ * ideal load or the cap: it only shrinks the largest single task, which is the
+ * quantity R2 actually tests. Each part is `taskHours / n`, so the answer is
+ * the smallest n where that share fits under `capHours`.
+ *
+ * The UI must not hardcode "split in two": with a 2 hour task and a 1.25 hour
+ * cap, 2 parts of 1 hour fit; a 5 hour task with a 1 hour cap needs 5 parts.
+ */
+export function smallestSplitThatFits(taskHours: number, capHours: number): number | null {
+  if (!Number.isFinite(taskHours) || !Number.isFinite(capHours)) return null;
+  if (taskHours <= 0 || capHours <= 0) return null;
+  if (taskHours <= capHours) return 1;
+  // Ceil is exact here: the nth part must be <= cap, so n >= taskHours / cap.
+  const n = Math.ceil(taskHours / capHours);
+  return Number.isFinite(n) && n > 1 ? n : null;
+}
+
 export function describeR2(load: number, idealLoad: number, capacity: number): string {
   const r2Limit = Number((idealLoad * 1.25).toFixed(2));
   const overR2 = load > r2Limit;

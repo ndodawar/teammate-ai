@@ -18,6 +18,7 @@ import {
   toPlainText,
   compareSnapshots,
   describeR2,
+  smallestSplitThatFits,
   weightSumLabel,
   weightSumIsExact,
   type Weights,
@@ -30,7 +31,11 @@ import { recordEvent } from '@/lib/client/events';
 import { LoadMeter } from '@/components/motion/score-bar';
 import { RevealGroup, RevealItem } from '@/components/motion/reveal';
 import { ScoreBreakdown } from '@/components/recommendations/score-breakdown';
-import { CandidateScoreChart } from '@/components/recommendations/candidate-score-chart';
+import {
+  CandidateScoreChart,
+  candidateStatus,
+  candidateStatusLabel,
+} from '@/components/recommendations/candidate-score-chart';
 import { DURATION, EASE } from '@/lib/motion/tokens';
 import { WorkspaceShell } from '@/components/ui/workspace-shell';
 import { Button, Chip, Eyebrow } from '@/components/ui/primitives';
@@ -794,6 +799,28 @@ export function ResultClient({ params }: { params: Promise<{ code: string }> }) 
 
       if (impossible.length > 0) {
         const w = impossible[0].detail!;
+        /*
+         * The old sentence here said "tambah anggota agar beban ideal naik".
+         * That is backwards. Ideal load is total hours divided by the number of
+         * members, so with the same work an extra member LOWERS the share and
+         * therefore lowers the R2 cap. For one 2 hour task the cap falls from
+         * 1.25 hours with 2 members to 0.63 with 4 and 0.25 with 10, which makes
+         * the task harder to place, not easier. Telling the reader to add people
+         * sent them down a path that cannot succeed.
+         *
+         * What does work is giving each member a smaller slice of the work, so
+         * that the largest single task fits under the cap. The suggestion below
+         * is computed from the same numbers the engine used, not written by hand.
+         */
+        const feasibleSplit = smallestSplitThatFits(w.taskHours, w.capHours);
+        const splitHint =
+          feasibleSplit !== null
+            ? `Pecah tugas menjadi minimal ${feasibleSplit} bagian, misalnya ` +
+              `${feasibleSplit} × ${(w.taskHours / feasibleSplit).toFixed(1)} jam, agar tiap bagian ` +
+              `tidak melebihi batas ${w.capHours.toFixed(2)} jam.`
+            : `Pecah tugas menjadi beberapa bagian yang masing-masing tidak melebihi ` +
+              `${w.capHours.toFixed(2)} jam.`;
+
         items.push({
           key: 'r2-impossible',
           tone: 'danger',
@@ -803,7 +830,10 @@ export function ResultClient({ params }: { params: Promise<{ code: string }> }) 
             `(${w.capHours.toFixed(2)} jam = 1,25 × beban ideal ${w.idealLoad.toFixed(2)} jam), ` +
             `misalnya ${w.taskHours} jam. Tidak ada anggota yang dapat menerimanya tanpa melanggar R2, ` +
             `jadi tugas itu dibiarkan tanpa penanggung jawab (pengecualian R4). ` +
-            `Perkecil estimasi jam tugas atau tambah anggota agar beban ideal naik.`,
+            splitHint +
+            ` Menambah anggota tidak menyelesaikan masalah ini: beban ideal dihitung dari ` +
+            `total jam dibagi jumlah anggota, sehingga anggota bertambah justru membuat ` +
+            `batas R2 makin kecil.`,
         });
       }
 
@@ -1354,26 +1384,39 @@ export function ResultClient({ params }: { params: Promise<{ code: string }> }) 
                           <p className="font-mono text-[10px] tabular-nums text-muted" data-numeric>
                             {task.estimated_hours} jam · effort {task.difficulty}/5
                           </p>
-                          {/* T-6.09: display task-level warnings (R2/R3) */}
+                          {/* T-FIX-MATRIX-01 point 11: the row states the numbers
+                              behind an unassigned task (effort, ideal load, R2 cap)
+                              instead of the vague badge "R2: semua gugur", which
+                              told the reader nothing they could act on. */}
                           {currentResult.warnings
                             .filter((w) => w.taskId === task.id)
                             .map((w, i) => (
                               <p
                                 key={i}
                                 className={`inline-flex items-center gap-1 rounded-sm px-1.5 py-0.5 text-[9.5px] font-medium ${
-                                  w.code === 'r2_locked_overload' ? 'bg-danger-surface text-danger' : 'bg-warn-surface text-warn'
+                                  w.code === 'r2_locked_overload' || w.detail?.exceedsCapAlone
+                                    ? 'bg-danger-surface text-danger'
+                                    : 'bg-warn-surface text-warn'
                                 }`}
                                 title={w.message}
                                 data-testid={`${w.code}-${task.id}`}
                               >
                                 <span aria-hidden="true">{w.code === 'r2_locked_overload' ? '⚠' : '▲'}</span>
                                 {w.code === 'r2_no_candidate'
-                                  ? 'R2: semua gugur'
+                                  ? w.detail
+                                    ? `R2: usaha ${w.detail.taskHours} jam > batas ${w.detail.capHours.toFixed(2)} jam`
+                                    : 'R2: tidak ada kandidat'
                                   : w.code === 'r3_no_candidate'
                                     ? 'R3: tidak ada kandidat'
                                     : 'R2: beban berlebih'}
                               </p>
                             ))}
+                          {currentResult.warnings.some((w) => w.taskId === task.id && w.detail) && (
+                            <p className="text-[10px] leading-snug tabular-nums text-muted" data-numeric>
+                              Beban ideal {currentResult.idealLoad.toFixed(2)} jam · batas R2{' '}
+                              {(currentResult.idealLoad * WORKLOAD_CAP_MULTIPLIER).toFixed(2)} jam
+                            </p>
+                          )}
                           {task.required_skills.length > 0 && (
                             <p className="text-[10.5px] leading-snug text-muted">
                               {task.required_skills.join(', ')}
@@ -1403,6 +1446,19 @@ export function ResultClient({ params }: { params: Promise<{ code: string }> }) 
                         const rule = (score?.warnings ?? [])
                           .map((w) => w.match(/^(R[1-5])/)?.[1])
                           .find((r): r is string => Boolean(r));
+                        /*
+                         * One shared status per member (T-FIX-MATRIX-01 point 10):
+                         * valid candidate, valid alternative, or excluded by R1,
+                         * R2 or R3. Calling every non-owner "kandidat" hid the
+                         * difference between a usable alternative and a member
+                         * the rules had already removed.
+                         */
+                        const cellStatus = candidateStatus({
+                          isPrimary,
+                          isAlternative: false,
+                          isEligible: Boolean(score?.isEligible),
+                          rule,
+                        });
                         const isFocused = focusedCell?.taskId === task.id && focusedCell?.memberId === member.id;
                         return (
                           <td key={member.id} className="border-l border-line/60 p-0 align-top">
@@ -1447,17 +1503,13 @@ export function ResultClient({ params }: { params: Promise<{ code: string }> }) 
                                 {percent}
                                 <span className="text-[9px] font-normal">%</span>
                               </span>
-                              {isPrimary ? (
-                                <span className="text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--accent-strong)]">
-                                  utama
-                                </span>
-                              ) : score?.isEligible ? (
-                                <span className="text-[9px] uppercase tracking-[0.06em]">kandidat</span>
-                              ) : (
-                                <span className="text-[9px] uppercase tracking-[0.06em]">
-                                  {rule ? `gugur ${rule}` : 'gugur'}
-                                </span>
-                              )}
+                              <span
+                                className={`text-[9px] uppercase tracking-[0.06em] ${
+                                  isPrimary ? 'font-semibold tracking-[0.08em] text-[var(--accent-strong)]' : ''
+                                }`}
+                              >
+                                {candidateStatusLabel(cellStatus)}
+                              </span>
                               <span
                                 aria-hidden="true"
                                 className={`block h-[2px] w-8 rounded-full ${isPrimary ? 'bg-[var(--accent)]' : 'bg-cloud'}`}

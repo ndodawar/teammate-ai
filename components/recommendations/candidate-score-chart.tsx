@@ -32,6 +32,51 @@ export interface ChartComponent {
   weight: number;
 }
 
+/**
+ * The five states the matrix must distinguish (T-FIX-MATRIX-01 point 10).
+ *
+ * Derived in one place so the chart, the panel and the matrix cell cannot
+ * disagree. The order matters: an R1 exclusion is decided before any score is
+ * computed, and an R3 warning applies only to a member who is otherwise
+ * eligible, so a member excluded by R2 is never called a "valid alternative".
+ */
+export type CandidateStatus = 'primary' | 'alternative' | 'candidate' | 'gugur-r1' | 'gugur-r2' | 'gugur-r3' | 'gugur';
+
+export function candidateStatus(row: {
+  isPrimary: boolean;
+  isAlternative: boolean;
+  isEligible: boolean;
+  rule?: string;
+}): CandidateStatus {
+  if (row.isPrimary) return 'primary';
+  if (row.isAlternative) return 'alternative';
+  if (row.isEligible) return 'candidate';
+  if (row.rule === 'R1') return 'gugur-r1';
+  if (row.rule === 'R2') return 'gugur-r2';
+  if (row.rule === 'R3') return 'gugur-r3';
+  return 'gugur';
+}
+
+/** Short Indonesian label for a status, used as visible text, never colour. */
+export function candidateStatusLabel(status: CandidateStatus): string {
+  switch (status) {
+    case 'primary':
+      return 'utama';
+    case 'alternative':
+      return 'alternatif';
+    case 'candidate':
+      return 'kandidat';
+    case 'gugur-r1':
+      return 'gugur R1';
+    case 'gugur-r2':
+      return 'gugur R2';
+    case 'gugur-r3':
+      return 'gugur R3';
+    default:
+      return 'gugur';
+  }
+}
+
 export interface ChartRow {
   memberId: string;
   name: string;
@@ -101,12 +146,22 @@ export function CandidateScoreChart({
         <tbody>
           {rows.map((row) => {
             const width = Math.max(0.02, row.total / maxTotal);
-            const label = [
-              row.isPrimary ? 'penanggung jawab' : row.isAlternative ? 'alternatif' : null,
-              row.isEligible ? null : row.rule ? `gugur ${row.rule}` : 'gugur',
-            ]
-              .filter(Boolean)
-              .join(', ');
+            const status = candidateStatus(row);
+            const label = candidateStatusLabel(status);
+            /*
+             * The visible label is kept to one or two words so it fits the
+             * column, but a screen reader must hear the role in full. Without
+             * this the spoken text named the numbers and left out the verdict,
+             * so "utama" carried no meaning to someone listening.
+             */
+            const ariaStatus =
+              status === 'primary'
+                ? 'penanggung jawab utama'
+                : status === 'alternative'
+                  ? 'alternatif'
+                  : status === 'candidate'
+                    ? 'kandidat yang memenuhi aturan'
+                    : `tidak memenuhi aturan, ${candidateStatusLabel(status)}`;
 
             return (
               <tr
@@ -119,7 +174,7 @@ export function CandidateScoreChart({
                   {label && (
                     <span
                       className={`mt-0.5 inline-block text-[9px] uppercase tracking-[0.05em] ${
-                        row.isPrimary
+                        status === 'primary'
                           ? 'font-semibold text-[var(--accent-strong)]'
                           : row.isEligible
                             ? 'text-muted'
@@ -136,7 +191,7 @@ export function CandidateScoreChart({
                       <div
                         className="flex h-[9px] w-full overflow-hidden rounded-sm bg-line"
                         role="img"
-                        aria-label={`${row.name}: ${components
+                        aria-label={`${row.name}: ${ariaStatus}. ${components
                           .map((c) => `${c.label} ${Math.round(row[c.key] * 100)} persen`)
                           .join(', ')}. Skor total ${Math.round(row.total * 100)} persen.`}
                       >

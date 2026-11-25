@@ -3613,3 +3613,127 @@ tanda `utama`, konsisten dengan keputusan mesin bahwa tugas 8 jam tidak dapat di
 matriks, dengan angka yang berasal langsung dari mesin, legenda berbobot nyata, dan status yang
 tidak bergantung pada warna. Matriks tetap menjadi pusat informasi; grafik melengkapi, bukan
 menggantikan. Seluruh 265 tes deterministik lulus, typecheck dan lint bersih, build berhasil.
+
+---
+
+## T-FIX-MATRIX-01: Perbaikan Final Matriks Rekomendasi
+
+Tanggal kerja: sesi ini. Melanjutkan T-3.XX. Cakupan: hanya penjelasan kondisi tidak layak dan
+status per anggota. Rumus, bobot K/S/C/M, dan aturan R1–R5 tidak diubah.
+
+### 1. Penyebab Akar Masalah
+
+Skenario screenshot direproduksi dengan mesin sungguhan: 2 anggota, 1 tugas 2 jam. Hasil mesin:
+
+- Beban ideal 1,00 jam, batas R2 1,25 jam.
+- Tidak ada pemilik, kedua anggota gugur R2.
+
+Angka mesin itu **sudah benar**. Tugas 2 jam memang tidak muat pada batas 1,25 jam, dan PRD
+melarang memaksakan penugasan yang melanggar R2. Yang salah adalah penjelasan yang diberikan
+kepada pengguna:
+
+| Cacat | Bukti | Lokasi |
+|---|---|---|
+| Kalimat saran salah secara matematis: "tambah anggota agar beban ideal naik" | Beban ideal = total jam / jumlah anggota. Menambah anggota MENURUNKAN beban ideal dan batas R2. Untuk tugas 2 jam: 2 anggota cap 1,25 jam, 4 anggota cap 0,63 jam, 10 anggota cap 0,25 jam. Saran ini menuntun pengguna ke jalan yang mustahil berhasil | `result-client.tsx` (banner r2-impossible) |
+| Badge baris tugas menulis "R2: semua gugur" | Tidak memuat angka apa pun, sehingga pengguna tidak tahu ukuran usaha versus batas | `result-client.tsx` (badge peringatan) |
+| Status sel tidak membedakan R1, R2, dan R3 | Setiap anggota bukan pemilik ditulis "kandidat" atau "gugur" saja | `result-client.tsx`, `candidate-score-chart.tsx` |
+
+Kesimpulan: masalahnya bukan perhitungan, melainkan penjelasan dan pelabelan status. Tidak ada
+pelonggaran R2 yang dilakukan, karena pelonggaran akan menyembunyikan pelanggaran aturan.
+
+### 2. Perbaikan
+
+1. **Saran pengganti dihitung, bukan ditulis tangan.** Fungsi baru
+   `smallestSplitThatFits(taskHours, capHours)` di `lib/scoring/interaction.ts` mengembalikan
+   jumlah bagian minimum agar tiap bagian muat di bawah batas R2, atau `null` bila mustahil.
+   Untuk kasus ini hasilnya 2 bagian, sehingga UI menulis "Pecah tugas menjadi minimal 2 bagian,
+   misalnya 2 × 1,0 jam".
+2. **Kalimat menambah anggota dibalik menjadi peringatan.** UI kini menyatakan bahwa menambah
+   anggota tidak menyelesaikan masalah ini karena batas R2 justru mengecil.
+3. **Badge baris memuat angka:** `R2: usaha 2 jam > batas 1.25 jam`, disertai baris
+   `Beban ideal 1.00 jam · batas R2 1.25 jam`.
+4. **Satu definisi status per anggota.** `candidateStatus()` dan `candidateStatusLabel()` di
+   `candidate-score-chart.tsx` menghasilkan lima status yang diminta: kandidat valid, alternatif
+   valid, gugur R1, gugur R2, gugur R3 (ditambah `utama`). Matriks, grafik, dan panel memakai
+   fungsi yang sama sehingga tidak dapat berbeda.
+5. **`aria-label` grafik menyebut status lengkap** ("penanggung jawab utama", "tidak memenuhi
+   aturan, gugur R2"), bukan hanya angka. Tanpa ini label pendek "utama" tidak bermakna bagi
+   pembaca layar.
+
+### 3. Berkas yang Diubah
+
+| Berkas | Tindakan |
+|---|---|
+| `lib/scoring/interaction.ts` | Diubah: fungsi `smallestSplitThatFits` |
+| `app/p/[code]/result/result-client.tsx` | Diubah: saran pecah tugas, badge berangka, baris ringkasan, status sel |
+| `components/recommendations/candidate-score-chart.tsx` | Diubah: `candidateStatus`, `candidateStatusLabel`, `aria-label` status |
+| `test/scoring/matrix_infeasible.test.ts` | **Dibuat**: 15 tes regresi |
+| `docs/STATUS.md` | Diubah: bagian ini (append-only) |
+
+3 berkas implementasi (batas 5). Tidak ada berkas lain yang disentuh. Tidak ada dependensi baru.
+Tidak ada commit atau push.
+
+### 4. Hasil Tes (output aktual)
+
+```
+npx vitest run test/scoring test/api test/ui test/validation
+ Test Files  20 passed (20)
+      Tests  280 passed (280)
+```
+
+Sebelumnya 265 tes; bertambah 15 tes baru di `test/scoring/matrix_infeasible.test.ts`. Cakupan
+tes baru sesuai permintaan:
+
+- 2 anggota, 1 tugas 2 jam: ideal 1,00 jam, cap 1,25 jam, tanpa pemilik, alasan memuat angka
+  (diuji sebagai `detail` dan sebagai teks pesan).
+- 2 anggota, 2 subtugas 1 jam: kedua subtugas mendapat pemilik, beban tiap anggota 1 jam
+  (di bawah cap 1,25), tanpa peringatan R2.
+- Kapasitas mengecil saat anggota ditambah: cap 1,25 → 0,63 → 0,25 untuk 2, 4, 10 anggota.
+- `smallestSplitThatFits`: 2 jam/1,25 = 2; 5 jam/1 = 5; tugas yang sudah muat = 1; masukan tidak
+  valid = `null`.
+- R3 fallback tetap memberi saran terbaik berperingatan, dan anggota itu tidak disebut kandidat
+  valid.
+- R1 mengeluarkan anggota 0 jam; R5 menolak perubahan pemilik tugas terkunci dan menjaga pemilik
+  saat hitung ulang; R4 satu penanggung jawab per tugas.
+- Perubahan slider tidak memanggil AI: `globalThis.fetch` diganti agar gagal bila dipanggil,
+  jumlah panggilan diperiksa 0, dan skor terbukti berubah saat bobot berubah (bukan no-op).
+
+Satu tes lama sempat gagal (`marks the primary owner in text, not only in colour`) karena label
+sel pendek berubah dari "penanggung jawab" menjadi "utama". Yang diperbaiki adalah komponennya
+(`aria-label` kini menyebut peran lengkap), bukan tesnya, sehingga tidak ada asersi yang
+dilunakkan.
+
+### 5. Bukti Saran Dapat Dijalankan
+
+Saran UI diuji dengan menjalankannya: tugas 2 jam dipecah menjadi 2 bagian 1 jam pada data yang
+sama menghasilkan kedua subtugas mendapat pemilik, beban 1 jam per anggota, dan tidak ada
+peringatan R2. Jadi angka yang disarankan bukan karangan; saran itu memang menyelesaikan kasus.
+
+Typecheck, lint, build:
+
+| Perintah | Hasil |
+|---|---|
+| `npx tsc --noEmit` | 0 error |
+| `npx eslint` (berkas terkait) | 0 error, 2 warning lama pada impor tak terpakai di `interaction.ts` (sudah ada sebelum sesi ini, tidak diubah) |
+| `npx next build` | berhasil, 12 rute |
+
+### 6. Keterbatasan yang Belum Terselesaikan
+
+- **Pembagian subtugas masih manual oleh pengguna.** Ticket meminta "jika pembagian subtugas
+  dilakukan pengguna, hitung ulang". Itu sudah berlaku: setelah subtugas ditambahkan lewat
+  halaman tugas, seluruh alur (beban ideal, skor, rekomendasi, grafik, ekspor) dihitung ulang dari
+  data terbaru karena semuanya memakai `globalAssign`. Yang belum ada adalah tombol yang memecah
+  tugas secara otomatis. Itu fitur baru, di luar batas "jangan menambahkan fitur di luar
+  perbaikan ini", jadi tidak dibuat.
+- **Verifikasi visual di browser belum dilakukan.** Tidak ada sesi browser di lingkungan ini. Yang
+  diverifikasi: keluaran teks dari mesin, markup statis grafik, typecheck, lint, build.
+- **Batas R2 tetap dapat membuat tugas besar tidak teralokasikan.** Ini perilaku benar sesuai PRD,
+  bukan cacat. Bila seluruh tugas lebih besar daripada 1,25 x beban ideal, sistem akan selalu
+  melaporkan tidak layak beserta angkanya.
+
+### Putusan
+
+**SELESAI.** Penyebab semua anggota gugur kini dijelaskan dengan angka dan bahasa pengguna, saran
+yang salah secara matematis ("tambah anggota") diganti dengan saran pembagian tugas yang
+diverifikasi dapat dijalankan, dan setiap anggota memiliki status yang jelas dan tidak
+bergantung pada warna. Tidak ada rekomendasi palsu, R1–R5 tetap berlaku, 280 tes lulus.
