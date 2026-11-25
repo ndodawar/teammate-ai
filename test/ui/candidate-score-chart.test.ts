@@ -59,14 +59,16 @@ describe('T-3.XX candidate score chart', () => {
 
   it('marks the primary owner in text, not only in colour', () => {
     const html = render([row({ memberId: 'm1', name: 'Budi', isPrimary: true })]);
-    expect(html).toContain('utama');
-    // The spoken label names the role as well.
-    expect(html).toContain('penanggung jawab');
+    // T-UI-FINAL-01: the visible label is the plain-language one; the spoken
+    // label still names the role in full so both readers get the same verdict.
+    expect(html).toContain('Penanggung jawab');
+    expect(html).toContain('Memenuhi semua aturan');
   });
 
   it('marks the alternative in text', () => {
     const html = render([row({ memberId: 'm2', name: 'Sari', isAlternative: true })]);
-    expect(html).toContain('alt');
+    expect(html).toContain('Alternatif');
+    expect(html).toContain('Layak menerima tugas ini');
   });
 
   it('states the excluding rule instead of hiding it behind a colour', () => {
@@ -74,11 +76,13 @@ describe('T-3.XX candidate score chart', () => {
       row({ memberId: 'm1', name: 'Budi', isEligible: false, rule: 'R2' }),
       row({ memberId: 'm2', name: 'Sari', isEligible: false, rule: 'R3' }),
     ]);
-    // The cross marker plus the rule letter, both as visible text.
-    expect(html).toContain('\u2715');
+    // The status is spelled out, the reason is a sentence, and the rule code
+    // stays available as small secondary text.
+    expect(html).toContain('Tidak layak');
+    expect(html).toContain('Beban kerja melebihi batas.');
     expect(html).toMatch(/R2/);
     expect(html).toMatch(/R3/);
-    expect(html).toContain('gugur');
+    expect(html).toContain('Belum ada kemampuan minimum yang dibutuhkan.');
   });
 
   it('gives every bar an accessible name listing the full breakdown', () => {

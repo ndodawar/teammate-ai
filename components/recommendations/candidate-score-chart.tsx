@@ -77,6 +77,44 @@ export function candidateStatusLabel(status: CandidateStatus): string {
   }
 }
 
+/**
+ * T-UI-FINAL-01: the eligibility column in the words a user can read.
+ *
+ * "gugur R2" is a code, not a sentence. This is the same five states the matrix
+ * distinguishes, spelled out; the code still travels in `code` so an examiner can
+ * map the row back to the PRD without the reader having to decode it first.
+ */
+export function candidateEligibilityPlain(status: CandidateStatus): {
+  label: string;
+  code?: string;
+  reason: string;
+} {
+  switch (status) {
+    case 'primary':
+      return { label: 'Penanggung jawab', reason: 'Memenuhi semua aturan dan skor tertinggi.' };
+    case 'alternative':
+      return { label: 'Alternatif', reason: 'Layak menerima tugas ini sebagai pilihan kedua.' };
+    case 'candidate':
+      return { label: 'Layak', reason: 'Memenuhi aturan, tetapi skornya belum tertinggi.' };
+    case 'gugur-r1':
+      return {
+        label: 'Tidak layak',
+        code: 'R1',
+        reason: 'Anggota tidak memiliki waktu tersedia.',
+      };
+    case 'gugur-r2':
+      return { label: 'Tidak layak', code: 'R2', reason: 'Beban kerja melebihi batas.' };
+    case 'gugur-r3':
+      return {
+        label: 'Tidak layak',
+        code: 'R3',
+        reason: 'Belum ada kemampuan minimum yang dibutuhkan.',
+      };
+    default:
+      return { label: 'Tidak layak', reason: 'Tidak memenuhi aturan penugasan.' };
+  }
+}
+
 export interface ChartRow {
   memberId: string;
   name: string;
@@ -123,7 +161,7 @@ export function CandidateScoreChart({
   const maxTotal = Math.max(...rows.map((r) => r.total), 0.0001);
 
   return (
-    <div className="space-y-2.5">
+    <div className="space-y-3">
       <table className="w-full border-collapse text-left">
         <caption className="sr-only">
           Perbandingan skor kandidat per komponen K, S, C, M. Nilai total adalah skor akhir
@@ -132,14 +170,14 @@ export function CandidateScoreChart({
         </caption>
         <thead>
           <tr className="border-b border-line">
-            <th scope="col" className="pb-1 pr-2 text-[10px] font-semibold uppercase tracking-[0.06em] text-muted">
+            <th scope="col" className="pb-1.5 pr-2 text-[10.5px] font-semibold uppercase tracking-[0.06em] text-muted">
               Anggota
             </th>
-            <th scope="col" className="pb-1 text-[10px] font-semibold uppercase tracking-[0.06em] text-muted">
-              Komposisi skor
+            <th scope="col" className="pb-1.5 text-[10.5px] font-semibold uppercase tracking-[0.06em] text-muted">
+              Skor kecocokan
             </th>
-            <th scope="col" className="pb-1 pl-2 text-right text-[10px] font-semibold uppercase tracking-[0.06em] text-muted">
-              Total
+            <th scope="col" className="pb-1.5 pl-2 text-right text-[10.5px] font-semibold uppercase tracking-[0.06em] text-muted">
+              Kelayakan
             </th>
           </tr>
         </thead>
@@ -147,51 +185,40 @@ export function CandidateScoreChart({
           {rows.map((row) => {
             const width = Math.max(0.02, row.total / maxTotal);
             const status = candidateStatus(row);
-            const label = candidateStatusLabel(status);
+            const plain = candidateEligibilityPlain(status);
             /*
-             * The visible label is kept to one or two words so it fits the
-             * column, but a screen reader must hear the role in full. Without
-             * this the spoken text named the numbers and left out the verdict,
-             * so "utama" carried no meaning to someone listening.
+             * The spoken text carries the role in full, because the visible
+             * column is short by design. Without this the screen reader named the
+             * numbers and left out the verdict.
              */
-            const ariaStatus =
-              status === 'primary'
-                ? 'penanggung jawab utama'
-                : status === 'alternative'
-                  ? 'alternatif'
-                  : status === 'candidate'
-                    ? 'kandidat yang memenuhi aturan'
-                    : `tidak memenuhi aturan, ${candidateStatusLabel(status)}`;
+            const ariaStatus = `${plain.label}${plain.code ? `, ${plain.code}` : ''}. ${plain.reason}`;
 
             return (
               <tr
                 key={row.memberId}
                 data-testid={`chart-row-${row.memberId}`}
-                className="border-b border-line/60 align-middle last:border-b-0"
+                className="border-b border-line/60 align-top last:border-b-0"
               >
-                <th scope="row" className="w-[112px] py-1.5 pr-2 text-left align-middle font-normal">
-                  <span className="block truncate text-[11.5px] font-medium text-ink">{row.name}</span>
-                  {label && (
-                    <span
-                      className={`mt-0.5 inline-block text-[9px] uppercase tracking-[0.05em] ${
-                        status === 'primary'
-                          ? 'font-semibold text-[var(--accent-strong)]'
-                          : row.isEligible
-                            ? 'text-muted'
-                            : 'font-semibold text-fog'
-                      }`}
-                    >
-                      {row.isEligible ? label : `\u2715 ${label}`}
+                <th scope="row" className="w-[132px] py-2 pr-2 text-left align-top font-normal">
+                  <span className="block text-[13px] font-semibold leading-snug text-ink">{row.name}</span>
+                  {!row.isEligible && plain.reason && (
+                    <span className="mt-0.5 block text-[10.5px] leading-snug text-muted">
+                      {plain.reason}
+                    </span>
+                  )}
+                  {row.isEligible && status === 'candidate' && (
+                    <span className="mt-0.5 block text-[10.5px] leading-snug text-muted">
+                      {plain.reason}
                     </span>
                   )}
                 </th>
-                <td className="py-1.5 align-middle">
-                  <div className="flex items-center gap-1.5">
+                <td className="py-2 align-top">
+                  <div className="flex items-center gap-2">
                     <div className="min-w-0 flex-1">
                       <div
-                        className="flex h-[9px] w-full overflow-hidden rounded-sm bg-line"
+                        className="flex h-[12px] w-full overflow-hidden rounded-sm bg-line"
                         role="img"
-                        aria-label={`${row.name}: ${ariaStatus}. ${components
+                        aria-label={`${row.name}: ${ariaStatus} ${components
                           .map((c) => `${c.label} ${Math.round(row[c.key] * 100)} persen`)
                           .join(', ')}. Skor total ${Math.round(row.total * 100)} persen.`}
                       >
@@ -232,7 +259,7 @@ export function CandidateScoreChart({
                           </motion.div>
                         )}
                       </div>
-                      <p className="mt-1 flex flex-wrap gap-x-2 gap-y-0 font-mono text-[9.5px] tabular-nums text-muted" data-numeric>
+                      <p className="mt-1 flex flex-wrap gap-x-2.5 gap-y-0 font-mono text-[10.5px] tabular-nums text-muted" data-numeric>
                         {components.map((component) => (
                           <span key={component.key}>
                             <span style={{ color: component.color }}>{component.key}</span>{' '}
@@ -241,21 +268,25 @@ export function CandidateScoreChart({
                         ))}
                       </p>
                     </div>
-                    <span className="w-[34px] shrink-0 text-right font-mono text-[12px] font-bold tabular-nums text-ink" data-numeric>
+                    <span className="w-[42px] shrink-0 text-right font-mono text-[15px] font-bold tabular-nums text-ink" data-numeric>
                       {Math.round(row.total * 100)}
-                      <span className="text-[9px] font-normal">%</span>
+                      <span className="text-[10px] font-normal">%</span>
                     </span>
                   </div>
                 </td>
-                <td className="w-[38px] py-1.5 pl-2 text-right align-middle">
-                  {row.isPrimary ? (
-                    <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-[var(--accent-strong)]">
-                      utama
+                <td className="w-[112px] py-2 pl-2 text-right align-top">
+                  <span
+                    className={`inline-block rounded-full px-2 py-0.5 text-[10.5px] font-semibold ${
+                      row.isEligible ? 'bg-ok-surface text-ok' : 'bg-warn-surface text-warn'
+                    }`}
+                  >
+                    <span aria-hidden="true" className="mr-1 font-mono">
+                      {row.isEligible ? '✓' : '×'}
                     </span>
-                  ) : row.isAlternative ? (
-                    <span className="text-[9px] uppercase tracking-[0.06em] text-ink">alt</span>
-                  ) : (
-                    <span className="text-[9px] uppercase tracking-[0.06em] text-fog">tidak</span>
+                    {plain.label}
+                  </span>
+                  {plain.code && (
+                    <span className="mt-0.5 block font-mono text-[10px] text-fog">{plain.code}</span>
                   )}
                 </td>
               </tr>
@@ -264,16 +295,16 @@ export function CandidateScoreChart({
         </tbody>
       </table>
 
-      <div className="space-y-1 border-t border-line pt-2">
-        <ul className="flex flex-wrap gap-x-3 gap-y-1">
+      <div className="space-y-1.5 border-t border-line pt-2.5">
+        <ul className="flex flex-wrap gap-x-3.5 gap-y-1.5">
           {components.map((component) => (
             <li key={component.key} className="flex items-center gap-1">
               <span
                 aria-hidden="true"
-                className="block h-[3px] w-3 rounded-full"
+                className="block h-[3px] w-3.5 rounded-full"
                 style={{ backgroundColor: component.color }}
               />
-              <span className="text-[10px] text-muted">
+              <span className="text-[10.5px] text-muted">
                 <span className="font-mono font-bold" style={{ color: component.color }}>
                   {component.key}
                 </span>{' '}
@@ -282,19 +313,19 @@ export function CandidateScoreChart({
             </li>
           ))}
         </ul>
-        <p className="text-[10px] leading-relaxed text-muted">
-          Panjang batang mengikuti skor akhir. Tinggi total adalah skor, potongannya adalah
-          kontribusi tiap komponen.
+        <p className="text-[10.5px] leading-relaxed text-muted">
+          Panjang batang mengikuti skor akhir; potongannya adalah kontribusi tiap komponen.
           {isFallback
             ? ' Mode cadangan aktif: K tidak dihitung, sehingga bobot K 0%.'
             : ' Skor = 0,40K + 0,30S + 0,20C + 0,10M.'}
           {typeof capHours === 'number' && typeof idealLoad === 'number'
-            ? ` Batas R2 ${capHours.toFixed(2)} jam (1,25 × beban ideal ${idealLoad.toFixed(2)} jam).`
+            ? ` Batas beban ${capHours.toFixed(2)} jam (1,25 × beban ideal ${idealLoad.toFixed(2)} jam).`
             : ''}
         </p>
-        <p className="text-[10px] leading-relaxed text-muted">
-          Tanda ✕ berarti anggota tidak memenuhi aturan, dan huruf setelahnya menyebut aturan
-          penyebabnya. Status tidak hanya dibedakan dengan warna.
+        <p className="text-[10.5px] leading-relaxed text-muted">
+          Kelayakan ditentukan aturan, bukan oleh skor. Anggota berskor tinggi tetap tidak layak
+          bila melewati batas beban atau tidak memenuhi kemampuan minimum. Status ditandai dengan
+          teks, bukan hanya warna.
         </p>
       </div>
     </div>

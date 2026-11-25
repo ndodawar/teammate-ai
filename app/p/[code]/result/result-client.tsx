@@ -6,7 +6,7 @@ import { usePrefersReducedMotion } from '@/lib/motion/use-reduced-motion';
 import { Task, Member, TaskAssignment, AssignmentResult } from '@/lib/scoring/types';
 import { globalAssign } from '@/lib/scoring/assign';
 import { DEFAULT_WEIGHTS, FALLBACK_WEIGHTS, WORKLOAD_CAP_MULTIPLIER } from '@/lib/scoring/constants';
-import { memberReason } from '@/lib/scoring/explain-local';
+import { memberReason, matchingSkills } from '@/lib/scoring/explain-local';
 import { checkR1 } from '@/lib/scoring/rules';
 import {
   redistributeWeights,
@@ -37,6 +37,8 @@ import {
   ScoreDetail,
   MemberLoadRow,
   TaskRecommendationCard,
+  assignmentReason,
+  RULE_PLAIN,
   summarise,
   type TaskCardData,
 } from '@/components/recommendations/result-dashboard';
@@ -887,16 +889,20 @@ export function ResultClient({ params }: { params: Promise<{ code: string }> }) 
    * so the banner can never disagree with the scores below it.
    */
   /**
-   * T-UI-MATRIX-01 point 7: every rule warning answers the same four questions,
-   * in the same order, so a student can act on it without knowing the rule
-   * numbers. Only rules that actually fired appear; a rule that held is not
-   * mentioned, because "R1 OK" everywhere is noise.
+   * T-UI-FINAL-01: every rule notice answers the same questions, in the same
+   * order: what happened (`headline`, plain language), what it means for you
+   * (`detail`), and what to do (`hint`). The rule code stays as small secondary
+   * text so the sentence maps back to the PRD without becoming the message.
+   * Only rules that actually fired appear; a rule that held is not mentioned,
+   * because "R1 OK" everywhere is noise.
    */
   type RuleNotice = {
     key: string;
     tone: 'danger' | 'warn' | 'info';
     headline: string;
     detail: string;
+    /** One actionable sentence. Optional: not every notice has a next step. */
+    hint?: string;
   };
   const assignmentStatus: RuleNotice[] = (() => {
     const items: RuleNotice[] = [];
@@ -906,11 +912,10 @@ export function ResultClient({ params }: { params: Promise<{ code: string }> }) 
         items.push({
           key: 'r1-all',
           tone: 'danger',
-          headline: 'R1: tidak ada anggota yang tersedia',
+          headline: 'Tidak ada anggota yang punya waktu tersedia',
           detail:
-            `Seluruh ${members.length} anggota memiliki jam tersedia 0, sehingga tidak satu pun lolos R1. ` +
-            `Akibatnya semua tugas tetap tanpa penanggung jawab. ` +
-            `Isi jam tersedia pada halaman Anggota, lalu hitung ulang.`,
+            `Seluruh ${members.length} anggota memiliki jam tersedia 0, sehingga tidak satu pun bisa menerima tugas. Semua tugas tetap tanpa penanggung jawab.`,
+          hint: 'Isi jam tersedia pada halaman Anggota, lalu hitung ulang.',
         });
       }
 
@@ -919,11 +924,10 @@ export function ResultClient({ params }: { params: Promise<{ code: string }> }) 
         items.push({
           key: 'r1-some',
           tone: 'warn',
-          headline: `R1: ${r1Excluded.length} anggota tidak dapat menerima tugas`,
+          headline: `${r1Excluded.length} anggota tidak ikut dibagi karena jam tersedia 0`,
           detail:
-            `${r1Excluded.map((m) => m.name).join(', ')} memiliki jam tersedia 0. ` +
-            `Mereka tidak dihitung sebagai kandidat, sehingga tugas dibagi ke anggota yang tersisa. ` +
-            `Bila ada tugas yang akhirnya tidak terbagi, naikkan jam tersedia anggota ini.`,
+            `${r1Excluded.map((m) => m.name).join(', ')} tidak dihitung sebagai kandidat, sehingga tugas dibagi ke anggota yang tersisa.`,
+          hint: 'Bila ada tugas yang akhirnya tidak terbagi, naikkan jam tersedia anggota ini.',
         });
       }
 
@@ -956,18 +960,16 @@ export function ResultClient({ params }: { params: Promise<{ code: string }> }) 
         items.push({
           key: 'r2-impossible',
           tone: 'danger',
-          headline: 'Tidak layak dialokasikan',
+          headline: 'Ada tugas yang lebih besar dari batas beban anggota',
           detail:
-            `Tugas belum dapat dialokasikan karena estimasi usaha melebihi batas beban anggota. ` +
-            `Pecah tugas menjadi beberapa subtugas atau periksa kembali estimasi usahanya. ` +
-            `${overCapText.summary}` +
+            `Estimasi pekerjaan membutuhkan ${w.taskHours} jam, sedangkan batas beban yang diizinkan ${w.capHours.toFixed(2)} jam. ` +
+            `Tugas perlu dibagi menjadi beberapa bagian atau estimasinya diperiksa kembali. ` +
+            `${overCapText.summary}`,
+          hint:
             (feasibleSplit !== null
-              ? ` Tiap bagian harus di bawah ${w.capHours.toFixed(2)} jam, jadi minimal ` +
-                `${feasibleSplit} bagian.`
+              ? `Tiap bagian harus di bawah ${w.capHours.toFixed(2)} jam, jadi minimal ${feasibleSplit} bagian. `
               : '') +
-            ` Menambah anggota tidak menyelesaikan masalah ini: beban ideal dihitung dari ` +
-            `total jam dibagi jumlah anggota, sehingga anggota bertambah justru membuat ` +
-            `batas R2 makin kecil.`,
+            'Menambah anggota tidak menyelesaikan masalah ini: beban ideal dihitung dari total jam dibagi jumlah anggota, sehingga anggota bertambah justru membuat batas beban makin kecil.',
         });
       }
 
@@ -975,12 +977,11 @@ export function ResultClient({ params }: { params: Promise<{ code: string }> }) 
         items.push({
           key: 'r2-blocked',
           tone: 'warn',
-          headline: `R2: ${blocked.length} tugas belum mendapat penanggung jawab`,
+          headline: `${blocked.length} tugas belum mendapat penanggung jawab`,
           detail:
-            `Tugas ini muat di bawah batas R2 (${currentResult.idealLoad * WORKLOAD_CAP_MULTIPLIER > 0 ? (currentResult.idealLoad * WORKLOAD_CAP_MULTIPLIER).toFixed(2) : '0'} jam), ` +
-            `tetapi setiap anggota yang lolos R1 dan R3 sudah membawa beban lain sehingga akan melewati batas itu bila menerimanya. ` +
-            `Akibatnya tugas dibiarkan kosong, bukan dipaksakan ke anggota yang melanggar. ` +
-            `Kurangi beban anggota lain, atau pecah tugas ini menjadi bagian yang lebih kecil.`,
+            `Tugas ini muat di bawah batas beban (${currentResult.idealLoad * WORKLOAD_CAP_MULTIPLIER > 0 ? (currentResult.idealLoad * WORKLOAD_CAP_MULTIPLIER).toFixed(2) : '0'} jam), ` +
+            `tetapi setiap anggota yang memenuhi aturan sudah membawa beban lain sehingga beban kerjanya akan melebihi batas bila menerimanya. Tugas dibiarkan kosong, bukan dipaksakan ke anggota yang melanggar.`,
+          hint: 'Kurangi beban anggota lain, atau pecah tugas ini menjadi bagian yang lebih kecil.',
         });
       }
 
@@ -989,12 +990,10 @@ export function ResultClient({ params }: { params: Promise<{ code: string }> }) 
         items.push({
           key: 'r3-fallback',
           tone: 'warn',
-          headline: `R3: ${r3Warnings.length} tugas tidak punya anggota dengan skill level 3`,
+          headline: `${r3Warnings.length} tugas belum punya anggota dengan kemampuan minimum`,
           detail:
-            `Belum ada anggota yang menguasai skill wajib tugas ini pada level 3 atau lebih. ` +
-            `Sesuai PRD, sistem tetap menampilkan saran terbaik yang tersedia, tetapi anggota itu belum memenuhi R3, ` +
-            `jadi jangan dianggap penugasan final. ` +
-            `Naikkan level skill anggota yang relevan pada halaman Anggota, atau periksa kembali skill wajib tugas ini.`,
+            'Belum ada anggota dengan kemampuan minimum yang dibutuhkan tugas ini. Sistem tetap menampilkan saran terbaik yang tersedia, tetapi anggota itu belum memenuhi aturan sehingga bukan penugasan final.',
+          hint: 'Naikkan level kemampuan anggota yang relevan pada halaman Anggota, atau periksa kembali kemampuan yang diminta tugas ini.',
         });
       }
 
@@ -1003,11 +1002,10 @@ export function ResultClient({ params }: { params: Promise<{ code: string }> }) 
         items.push({
           key: 'r5-overload',
           tone: 'warn',
-          headline: `R5: ${lockedOverload.length} tugas terkunci membuat beban berlebih`,
+          headline: `${lockedOverload.length} tugas terkunci membuat beban anggota melebihi batas`,
           detail:
-            `Tugas yang Anda kunci tetap dipegang pemiliknya meskipun bebannya melewati batas R2. ` +
-            `R5 dipertahankan, jadi tugas tidak dipindahkan otomatis dan beban anggota itu melampaui batas. ` +
-            `Buka kunci tugas tersebut bila ingin sistem mencarikan pemilik lain.`,
+            'Tugas yang Anda kunci tetap dipegang pemiliknya meskipun bebannya melewati batas. Tugas yang dikunci tidak akan berubah otomatis.',
+          hint: 'Buka kunci tugas tersebut bila ingin sistem mencarikan pemilik lain.',
         });
       }
 
@@ -1019,17 +1017,17 @@ export function ResultClient({ params }: { params: Promise<{ code: string }> }) 
             tone: 'warn',
             headline: `${unassigned} tugas belum punya penanggung jawab`,
             detail:
-              'Setiap tugas hanya boleh punya satu penanggung jawab (R4), jadi tugas ini dibiarkan kosong ' +
-              'daripada dibagi diam-diam ke beberapa orang. Lihat alasan pada kartu tugas atau baris matriks.',
+              'Setiap tugas hanya memiliki satu penanggung jawab, jadi tugas ini dibiarkan kosong daripada dibagi diam-diam ke beberapa orang.',
+            hint: 'Lihat alasan pada kartu tugas atau baris matriks.',
           });
         } else {
           items.push({
             key: 'ok',
             tone: 'info',
-            headline: 'Semua tugas mendapat penanggung jawab yang memenuhi R1 sampai R4',
+            headline: 'Semua tugas sudah dibagikan dan memenuhi aturan',
             detail:
-              'Setiap tugas punya tepat satu penanggung jawab, dan batas R2 serta syarat R3 terpenuhi. ' +
-              'Buka rincian perhitungan bila ingin melihat asal skornya.',
+              'Setiap tugas punya tepat satu penanggung jawab, dan batas beban serta kemampuan minimum terpenuhi.',
+            hint: 'Buka rincian perhitungan pada kartu tugas bila ingin melihat asal skornya.',
           });
         }
       }
@@ -1069,6 +1067,33 @@ export function ResultClient({ params }: { params: Promise<{ code: string }> }) 
     const altScore = altId ? assignment.scores[altId] : undefined;
     const altIsValid = Boolean(altId && altScore?.isEligible);
 
+    const ownerBreakdown = assignment.primaryMemberId
+      ? assignment.scores[assignment.primaryMemberId]?.breakdown
+      : undefined;
+    /*
+     * T-UI-FINAL-01: the sentence a student would say. It is assembled from the
+     * engine's own breakdown and from `matchingSkills`, the same helper the
+     * engine's explanation uses, so the named abilities are exactly the ones that
+     * cleared the R3 floor. No owner, no sentence: an unassigned task gets the
+     * explanation the card already writes, never a fabricated recommendation.
+     *
+     * An ineligible R3 fallback gets no praise either: "paling sesuai" would be a
+     * claim about abilities that did not meet the minimum.
+     */
+    const ownerReason =
+      owner && ownerBreakdown && assignment.scores[owner.id]?.isEligible
+        ? assignmentReason({
+            memberName: owner.name,
+            matchedSkills: matchingSkills(task, owner),
+            requiredSkills: task.required_skills,
+            score: ownerBreakdown.total,
+          })
+        : owner && ownerBreakdown
+          ? `Saran terbaik saat ini adalah ${owner.name}, tetapi belum ada anggota yang memenuhi kemampuan minimum untuk tugas ini. Skor kecocokan ${Math.round(
+              ownerBreakdown.total * 100
+            )}%.`
+          : null;
+
     return {
       task,
       ownerName: owner?.name ?? null,
@@ -1077,6 +1102,7 @@ export function ResultClient({ params }: { params: Promise<{ code: string }> }) 
       ownerIsEligible: assignment.primaryMemberId
         ? (assignment.scores[assignment.primaryMemberId]?.isEligible ?? null)
         : null,
+      ownerReason,
       alternativeName: altIsValid ? (memberById.get(altId!)?.name ?? null) : null,
       alternativeScore: altIsValid ? (altScore?.breakdown.total ?? null) : null,
       warnings: currentResult.warnings.filter((w) => w.taskId === task.id),
@@ -1312,55 +1338,20 @@ export function ResultClient({ params }: { params: Promise<{ code: string }> }) 
           </section>
         </aside>
 
-        {/* T-UI-MATRIX-01: the dashboard. The heading names the job of the
-            screen rather than the artifact, because a student arrives asking
-            "who gets what", not "show me a matrix". */}
-        <section className="min-w-0 flex-1" aria-label="Hasil rekomendasi">
-          <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
+        {/* T-UI-FINAL-01: the heading names the outcome, and the sentence under it
+            says what the system actually weighed. The technical basis (ideal load,
+            1,25) is not repeated here — it lives in each card's disclosure, where
+            someone asking "how" will look for it. */}
+        <section className="min-w-0 flex-1" aria-label="Hasil pembagian tugas">
+          <div className="mb-4 flex flex-wrap items-end justify-between gap-x-4 gap-y-3">
             <div className="space-y-1.5">
               <Eyebrow>FR-08 · FR-09 · FR-11 · FR-18</Eyebrow>
-              <h1 className="display text-[clamp(1.5rem,2.4vw,1.9rem)] text-ink">
-                Hasil <span className="accent-word">pembagian tugas</span>
+              <h1 className="display text-[clamp(1.65rem,2.6vw,2.15rem)] text-ink">
+                Hasil Pembagian Tugas
               </h1>
-              <p className="max-w-[70ch] text-[12px] leading-relaxed text-muted">
-                Siapa menerima tugas apa, dan mengapa. Skor kecocokan hanya perbandingan antar
-                anggota; yang menentukan penanggung jawab adalah status kelayakan.
-              </p>
-              {/*
-                T-FIX-R2-02. The matrix used to be the only place a reader could
-                learn the R2 cap, and only after scrolling to a row. The two
-                figures below come straight from the engine (`idealLoad` and the
-                same 1.25 multiplier `globalAssign` applies), so the summary can
-                never drift from the rule actually enforced. It sits above the
-                table so the basis of every eligibility decision is visible
-                before the first score is read.
-              */}
-              <dl
-                className="flex flex-wrap items-baseline gap-x-4 gap-y-1 pt-1 font-mono text-[11px] tabular-nums text-muted"
-                data-testid="load-limit-summary"
-                data-numeric
-              >
-                <div className="flex items-baseline gap-1.5">
-                  <dt className="font-sans">Beban ideal</dt>
-                  <dd className="text-ink">{currentResult.idealLoad.toFixed(2)} jam</dd>
-                </div>
-                <div className="flex items-baseline gap-1.5">
-                  <dt className="font-sans">Batas R2 per anggota</dt>
-                  <dd className="text-ink">
-                    {(currentResult.idealLoad * WORKLOAD_CAP_MULTIPLIER).toFixed(2)} jam
-                  </dd>
-                </div>
-                <div className="flex items-baseline gap-1.5">
-                  <dt className="font-sans">Hitungan</dt>
-                  <dd>1,25 × beban ideal</dd>
-                </div>
-              </dl>
-              <p className="max-w-[70ch] text-[11.5px] leading-relaxed text-muted">
-                <span className="font-medium text-ink">Skor kecocokan</span> hanya informasi
-                perbandingan antar anggota. Skor tidak menjamin penugasan: anggota dengan skor
-                tertinggi tetap tidak dipilih bila melanggar batas R2, jam tersedia, atau aturan
-                lain. Yang menentukan penanggung jawab adalah{' '}
-                <span className="font-medium text-ink">status kelayakan</span> pada tiap baris.
+              <p className="max-w-[62ch] text-[13.5px] leading-relaxed text-muted">
+                Sistem menganalisis kemampuan, minat, dan kapasitas anggota untuk memberikan
+                rekomendasi pembagian tugas yang lebih terukur.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-1.5">
@@ -1393,18 +1384,20 @@ export function ResultClient({ params }: { params: Promise<{ code: string }> }) 
               render, so the three cannot disagree. */}
           <ResultSummary summary={summary} />
 
-          {/* FR-08: the requirement list is only useful with its verdict. This
-              banner states, from engine output alone, which of the PRD v0.3
-              conditions applies (no owner, R3 fallback, R1 exclusion, or an
-              effort above the R2 cap) instead of leaving the reader to infer it
-              from five identical "gugur" cells. */}
+          {/*
+            T-UI-FINAL-01: these banners used to be four technical paragraphs that
+            pushed the first task card below the fold. They still say exactly what
+            the engine found — nothing is dropped — but each one leads with the
+            outcome and keeps the rule code in the margin. The full rule text is in
+            the per-card disclosure and in the list at the end of the summary view.
+          */}
           {assignmentStatus.length > 0 && (
-            <ul className="mb-2 space-y-1.5" data-testid="assignment-status">
+            <ul className="mt-3 space-y-2" data-testid="assignment-status">
               {assignmentStatus.map((s) => (
                 <li
                   key={s.key}
                   data-testid={`status-${s.key}`}
-                  className={`rounded-[var(--radius-input)] px-3 py-2 text-[11.5px] leading-relaxed ${
+                  className={`rounded-[var(--radius-input)] px-3.5 py-2.5 text-[12.5px] leading-relaxed ${
                     s.tone === 'danger'
                       ? 'bg-danger-surface text-danger'
                       : s.tone === 'warn'
@@ -1413,12 +1406,13 @@ export function ResultClient({ params }: { params: Promise<{ code: string }> }) 
                   }`}
                 >
                   <p className="font-semibold">
-                    <span aria-hidden="true" className="mr-1">
-                      {s.tone === 'danger' ? '⚠' : s.tone === 'warn' ? '▲' : '·'}
+                    <span aria-hidden="true" className="mr-1.5 font-mono">
+                      {s.tone === 'danger' ? '×' : s.tone === 'warn' ? '!' : '✓'}
                     </span>
                     {s.headline}
                   </p>
-                  <p className="mt-0.5">{s.detail}</p>
+                  <p className="mt-1 leading-relaxed">{s.detail}</p>
+                  {s.hint && <p className="mt-1 opacity-80">{s.hint}</p>}
                   {/* T-FIX-R2-02: when the problem is an oversized task, the
                       next step is to split it. The button opens the panel for the
                       task the banner is about, so the reader does not have to
@@ -1432,7 +1426,7 @@ export function ResultClient({ params }: { params: Promise<{ code: string }> }) 
                         setSplitError(null);
                         setDetailTaskId(impossibleTaskId);
                       }}
-                      className="mt-1.5 rounded-full bg-card px-2.5 py-1 text-[11px] font-semibold text-danger shadow-[inset_0_0_0_1px_var(--danger)] transition-colors duration-200 hover:bg-danger-surface"
+                      className="mt-2 rounded-full bg-card px-2.5 py-1 text-[11.5px] font-semibold text-danger shadow-[inset_0_0_0_1px_var(--danger)] transition-colors duration-200 hover:bg-danger-surface"
                     >
                       Pecah tugas
                     </button>
@@ -1453,8 +1447,8 @@ export function ResultClient({ params }: { params: Promise<{ code: string }> }) 
           >
             {(
               [
-                { key: 'ringkasan' as const, label: 'Ringkasan per tugas', hint: `${rows.length} kartu` },
-                { key: 'matriks' as const, label: 'Matriks lengkap', hint: 'semua anggota' },
+                { key: 'ringkasan' as const, label: 'Ringkasan hasil', hint: `${rows.length} kartu` },
+                { key: 'matriks' as const, label: 'Matriks lengkap', hint: 'semua perhitungan' },
               ]
             ).map((tab) => {
               const active = view === tab.key;
@@ -1483,18 +1477,18 @@ export function ResultClient({ params }: { params: Promise<{ code: string }> }) 
             })}
           </div>
 
-          {/* ---- View: ringkasan per tugas (default) ---- */}
+          {/* ---- View: ringkasan hasil (default) ---- */}
           {view === 'ringkasan' && (
-            <div id="view-ringkasan" role="tabpanel" aria-labelledby="tab-ringkasan" className="space-y-2.5">
+            <div id="view-ringkasan" role="tabpanel" aria-labelledby="tab-ringkasan" className="mt-3 space-y-3">
               {/* Point 8: every member's load, against the R2 cap, on this view. */}
-              <section className="glass-solid rounded-[var(--radius-card)] p-4" data-testid="member-load-summary">
-                <header className="flex flex-wrap items-baseline justify-between gap-2 border-b border-line pb-2">
-                  <h2 className="heading text-[13px] text-ink">Beban anggota</h2>
-                  <span className="font-mono text-[10.5px] tabular-nums text-muted" data-numeric>
-                    batas R2 {capHours.toFixed(2)} jam
+              <section className="glass-solid rounded-[var(--radius-card)] p-4 sm:p-5" data-testid="member-load-summary">
+                <header className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 border-b border-line pb-2">
+                  <h2 className="heading text-[14px] text-ink">Beban anggota</h2>
+                  <span className="font-mono text-[11px] tabular-nums text-muted" data-numeric>
+                    batas beban {capHours.toFixed(2)} jam per anggota
                   </span>
                 </header>
-                <ul className="grid gap-x-5 gap-y-3 pt-2.5 sm:grid-cols-2">
+                <ul className="grid gap-x-6 gap-y-3.5 pt-3 sm:grid-cols-2 xl:grid-cols-3">
                   {members.map((member) => (
                     <li key={member.id}>
                       <MemberLoadRow
@@ -1506,10 +1500,17 @@ export function ResultClient({ params }: { params: Promise<{ code: string }> }) 
                     </li>
                   ))}
                 </ul>
+                <p className="mt-3 border-t border-line pt-2.5 text-[11px] leading-relaxed text-muted">
+                  Beban adalah jumlah estimasi jam tugas yang ditugaskan ke anggota. Anggota dengan
+                  jam tersedia 0 tidak ikut dibagi.
+                </p>
               </section>
 
+              <h2 className="pt-1 text-[14px] font-semibold text-ink">Hasil pembagian per tugas</h2>
+
               {/* Points 2 and 7: one card per task, owner named only when the
-                  engine assigned one, with the rule and its numbers when not. */}
+                  engine assigned one, with a plain-language reason when it did. */}
+              <div className="grid gap-3 xl:grid-cols-2">
               {taskCards.map((card) => {
                 const assignment = byTaskId.get(card.task.id);
                 const ownerId = assignment?.primaryMemberId ?? '';
@@ -1545,18 +1546,46 @@ export function ResultClient({ params }: { params: Promise<{ code: string }> }) 
                     }
                     onMove={() => setDetailTaskId(card.task.id)}
                   >
-                    {/* The K/S/C/M arithmetic, folded away until asked for. */}
+                    {/* The K/S/C/M arithmetic and the rule text, folded away
+                        until asked for. This is the academic block the ticket
+                        requires to stay available. */}
                     {ownerBreakdown && (
                       <ScoreDetail
                         breakdown={ownerBreakdown}
                         weights={weights}
                         isFallback={isFallback}
                         memberName={memberById.get(ownerId)?.name ?? ''}
+                        idealLoad={currentResult.idealLoad}
+                        capHours={capHours}
                       />
                     )}
                   </TaskRecommendationCard>
                 );
               })}
+              </div>
+
+              {/*
+                The five rules in user language, once, at the bottom of the
+                summary. They are reference material for the demonstration, not
+                the message of the page, so they come after the results and can be
+                folded away. The code stays visible so a reader can map each
+                sentence back to the PRD.
+              */}
+              <details className="glass-solid rounded-[var(--radius-card)] px-4 py-3 sm:px-5">
+                <summary className="cursor-pointer text-[13px] font-medium text-ink">
+                  Aturan yang dipakai sistem (R1–R5)
+                </summary>
+                <dl className="mt-2.5 space-y-1.5">
+                  {(Object.keys(RULE_PLAIN) as Array<keyof typeof RULE_PLAIN>).map((code) => (
+                    <div key={code} className="flex gap-2 text-[12px] leading-relaxed">
+                      <dt className="w-8 shrink-0 font-mono text-[11px] font-semibold text-muted">
+                        {code}
+                      </dt>
+                      <dd className="text-ink">{RULE_PLAIN[code]}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </details>
             </div>
           )}
 

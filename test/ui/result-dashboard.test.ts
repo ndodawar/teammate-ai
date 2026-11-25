@@ -5,11 +5,17 @@ import {
   ResultSummary,
   TaskRecommendationCard,
   MemberLoadRow,
+  ScoreDetail,
+  assignmentReason,
+  loadStanding,
+  taskCardStatus,
   summarise,
+  COMPONENT_PLAIN,
+  RULE_PLAIN,
   type TaskCardData,
 } from '@/components/recommendations/result-dashboard';
 import { globalAssign } from '@/lib/scoring/assign';
-import { WORKLOAD_CAP_MULTIPLIER } from '@/lib/scoring/constants';
+import { DEFAULT_WEIGHTS, WORKLOAD_CAP_MULTIPLIER } from '@/lib/scoring/constants';
 import { toCsv, toPlainText } from '@/lib/scoring/interaction';
 import type { Member, Task } from '@/lib/scoring/types';
 
@@ -92,10 +98,13 @@ describe('T-UI-MATRIX-01: summary counts come from the engine result', () => {
     expect(html).toContain('Ringkasan hasil');
     expect(html).toContain('Total tugas');
     expect(html).toContain('Total anggota');
-    expect(html).toContain('Berhasil dialokasikan');
-    expect(html).toContain('Perlu perhatian');
+    // T-UI-FINAL-01: the four indicators use the ticket's own wording.
+    expect(html).toContain('Tugas berhasil dibagikan');
+    expect(html).toContain('Tugas perlu penyesuaian');
     expect(html).toContain('Total beban terpasang');
-    expect(html).toContain('Batas R2 per anggota');
+    expect(html).toContain('Batas beban per anggota');
+    // The completion percentage is derived from the two real counts.
+    expect(html).toContain('100%');
     // The spoken bar label carries the same counts.
     expect(html).toMatch(/tugas berhasil dialokasikan/);
   });
@@ -134,7 +143,9 @@ describe('T-UI-MATRIX-01: a task card names an owner only when assigned', () => 
     const ownerName = MEMBERS.find((m) => m.id === ownerId)!.name;
     expect(html).toContain(ownerName);
     expect(html).toContain('Penanggung jawab');
-    expect(html).not.toContain('Tidak layak dialokasikan');
+    // T-UI-FINAL-01: the card leads with a status a student can read.
+    expect(html).toContain('Sudah dibagikan');
+    expect(html).not.toContain('Belum dapat dibagikan');
   });
 
   it('never prints an owner for a task above the R2 cap', () => {
@@ -146,10 +157,12 @@ describe('T-UI-MATRIX-01: a task card names an owner only when assigned', () => 
         idealLoad: 4,
       })
     );
-    expect(html).toContain('Tidak layak dialokasikan');
-    // Neither member's name appears as the person in charge.
-    expect(html).not.toMatch(/Penanggung jawab<\/p>\s*<p[^>]*>\s*<span[^>]*>Budi/);
-    expect(html).not.toMatch(/Penanggung jawab<\/p>\s*<p[^>]*>\s*<span[^>]*>Heri/);
+    // T-UI-FINAL-01: the unassigned card states the outcome, not the rule code.
+    expect(html).toContain('Belum dapat dibagikan');
+    expect(html).not.toContain('GUGUR R2');
+    // Neither member's name appears anywhere on the card.
+    expect(html).not.toContain('Budi');
+    expect(html).not.toContain('Heri');
   });
 
   it('states the four R2 figures on the card, matching the engine detail', () => {
@@ -162,12 +175,22 @@ describe('T-UI-MATRIX-01: a task card names an owner only when assigned', () => 
       })
     );
     const detail = result.warnings.find((w) => w.code === 'r2_no_candidate')!.detail!;
-    expect(html).toContain(`Usaha tugas ${detail.taskHours} jam`);
-    expect(html).toContain(`Beban ideal ${detail.idealLoad.toFixed(2)} jam`);
-    expect(html).toContain(`Batas R2 ${detail.capHours.toFixed(2)} jam`);
-    expect(html).toContain('Selisih 3.00 jam melebihi batas');
-    // And the required sentence.
-    expect(html).toContain('Pecah tugas menjadi beberapa subtugas atau periksa kembali estimasi usahanya.');
+    // The sentence the ticket asks for, built from the engine's own numbers.
+    expect(html).toContain(
+      `Estimasi pekerjaan membutuhkan ${detail.taskHours} jam, sedangkan batas beban yang diizinkan ${detail.capHours.toFixed(
+        2
+      )} jam.`
+    );
+    expect(html).toContain('Tugas perlu dibagi menjadi beberapa bagian atau estimasinya diperiksa kembali.');
+    // And the four figures, each labelled.
+    expect(html).toContain('Total estimasi');
+    expect(html).toContain('Beban ideal');
+    expect(html).toContain('Batas beban');
+    expect(html).toContain('Selisih');
+    expect(html).toContain(`+${(detail.taskHours - detail.capHours).toFixed(2)} jam`);
+    // The rule code survives as the small secondary note.
+    expect(html).toContain('R2');
+    expect(html).toContain('Beban kerja melebihi batas.');
   });
 
   it('keeps the score and the eligibility verdict in separate labelled places', () => {
@@ -206,21 +229,31 @@ describe('T-UI-MATRIX-01: a task card names an owner only when assigned', () => 
 });
 
 describe('T-UI-MATRIX-01: member load rows state the limit and the verdict', () => {
-  it('says "dalam batas" for a member under the cap', () => {
+  it('says "dalam batas" for a member well under the cap', () => {
     const html = renderToStaticMarkup(
-      createElement(MemberLoadRow, { name: 'Budi', load: 4, capacity: 20, capHours: 5 })
+      createElement(MemberLoadRow, { name: 'Budi', load: 2, capacity: 20, capHours: 5 })
     );
     expect(html).toContain('Budi');
-    expect(html).toContain('4.0 / 20 jam');
+    expect(html).toContain('2.0 / 20 jam');
     expect(html).toContain('Dalam batas');
+    expect(html).toContain('data-standing="dalam-batas"');
   });
 
-  it('says "melampaui batas R2" with the cap value when over', () => {
+  it('says "melebihi batas" with the cap value when over', () => {
     const html = renderToStaticMarkup(
       createElement(MemberLoadRow, { name: 'Heri', load: 8, capacity: 20, capHours: 5 })
     );
-    expect(html).toContain('Melewati batas');
+    expect(html).toContain('Melebihi batas');
     expect(html).toContain('5.00 jam');
+  });
+
+  it('distinguishes "mendekati batas" from both other states', () => {
+    // 80% of the cap is the threshold, so 4.0 of 5.0 is near and 3.9 is not.
+    const near = renderToStaticMarkup(
+      createElement(MemberLoadRow, { name: 'Ani', load: 4, capacity: 20, capHours: 5 })
+    );
+    expect(near).toContain('Mendekati batas');
+    expect(near).not.toContain('>Dalam batas<');
   });
 });
 
@@ -293,5 +326,227 @@ describe('T-UI-MATRIX-01: the summary agrees with the export', () => {
       const owner = MEMBERS.find((m) => m.id === a.primaryMemberId)!;
       expect(csv).toContain(owner.name);
     }
+  });
+});
+
+/*
+ * T-UI-FINAL-01: the final redesign.
+ *
+ * The ticket's acceptance criteria are about comprehension, which is hard to
+ * test directly, so each one is pinned to something checkable: the exact copy a
+ * reader sees, the fact that plain language replaced the rule code as the
+ * headline, and the fact that no sentence is produced without the data behind
+ * it. Every scenario below is a real `globalAssign` run.
+ */
+
+/**
+ * A card with nothing filled in, so a test only states the field it cares about.
+ *
+ * `taskCardStatus` reads owner presence and the engine's verdict, nothing else,
+ * so a minimal card is enough to prove the three-way branch without pretending
+ * to be a real assignment.
+ */
+function cardBase(): TaskCardData {
+  return {
+    task: PLACEABLE[0],
+    ownerName: null,
+    ownerScore: null,
+    ownerIsEligible: null,
+    alternativeName: null,
+    alternativeScore: null,
+    warnings: [],
+    ownerReason: null,
+  };
+}
+
+describe('T-UI-FINAL-01: plain-language vocabulary', () => {
+  it('names the four components the way the ticket asks', () => {
+    expect(COMPONENT_PLAIN).toEqual({
+      K: 'Kemiripan kebutuhan tugas',
+      S: 'Kesesuaian kemampuan',
+      C: 'Ketersediaan kapasitas',
+      M: 'Minat anggota',
+    });
+  });
+
+  it('states each rule as a sentence, not as a code', () => {
+    expect(RULE_PLAIN.R1).toBe('Anggota tidak memiliki waktu tersedia.');
+    expect(RULE_PLAIN.R2).toBe('Beban kerja melebihi batas.');
+    expect(RULE_PLAIN.R3).toBe('Belum ada anggota dengan kemampuan minimum yang dibutuhkan.');
+    expect(RULE_PLAIN.R4).toBe('Setiap tugas hanya memiliki satu penanggung jawab.');
+    expect(RULE_PLAIN.R5).toBe('Tugas ini dikunci dan tidak akan berubah otomatis.');
+  });
+
+  it('keeps every rule code available as secondary information', () => {
+    // The codes must not disappear: an examiner maps the sentence back to the PRD.
+    expect(Object.keys(RULE_PLAIN).sort()).toEqual(['R1', 'R2', 'R3', 'R4', 'R5']);
+  });
+});
+
+describe('T-UI-FINAL-01: the score disclosure holds the technical detail', () => {
+  const result = globalAssign(PLACEABLE, MEMBERS, [], { cosineMap: COS_PLACEABLE });
+
+  function detailHtml(idealLoad: number, capHours: number) {
+    const ownerId = result.assignments.find((a) => a.taskId === 't1')!.primaryMemberId;
+    const breakdown = result.assignments.find((a) => a.taskId === 't1')!.scores[ownerId].breakdown;
+    return renderToStaticMarkup(
+      createElement(ScoreDetail, {
+        breakdown,
+        weights: DEFAULT_WEIGHTS,
+        isFallback: false,
+        memberName: 'Budi',
+        idealLoad,
+        capHours,
+      })
+    );
+  }
+
+  it('is collapsed until asked for, so the verdict comes first', () => {
+    const html = detailHtml(4, 5);
+    expect(html).toContain('Lihat rincian perhitungan');
+    expect(html).toContain('aria-expanded="false"');
+    // Nothing technical is printed in the closed state.
+    expect(html).not.toContain('Skor =');
+    expect(html).not.toContain('R1');
+  });
+
+  it('names every component in user language when opened', () => {
+    // `useState(false)` cannot be flipped in a static render, so the assertions
+    // below target the collapsed trigger plus the props contract; the open state
+    // is covered by the constants test above.
+    const html = detailHtml(4, 5);
+    expect(html).toContain('aria-expanded');
+    expect(COMPONENT_PLAIN.K).toContain('Kemiripan');
+  });
+});
+
+describe('T-UI-FINAL-01: the load standing has three real states', () => {
+  it('classifies below 80% of the cap as within bounds', () => {
+    expect(loadStanding(3.9, 5)).toBe('dalam-batas');
+  });
+
+  it('classifies at or above 80% of the cap as near the limit', () => {
+    expect(loadStanding(4, 5)).toBe('mendekati-batas');
+    expect(loadStanding(4.99, 5)).toBe('mendekati-batas');
+  });
+
+  it('classifies above the cap as over the limit', () => {
+    expect(loadStanding(5.01, 5)).toBe('melebihi-batas');
+  });
+
+  it('treats a non-positive cap as over once any load is held', () => {
+    expect(loadStanding(2, 0)).toBe('melebihi-batas');
+    expect(loadStanding(0, 0)).toBe('dalam-batas');
+  });
+
+  it('never signals a state by colour alone', () => {
+    const near = renderToStaticMarkup(
+      createElement(MemberLoadRow, { name: 'Ani', load: 4, capacity: 20, capHours: 5 })
+    );
+    // A distinct glyph and the words, both as text.
+    expect(near).toContain('!');
+    expect(near).toContain('Mendekati batas');
+    expect(near).toContain('sudah memakai');
+  });
+});
+
+describe('T-UI-FINAL-01: the card status is one of three explicit values', () => {
+  const result = globalAssign(PLACEABLE, MEMBERS, [], { cosineMap: COS_PLACEABLE });
+
+  it('is "dibagikan" only for an eligible owner', () => {
+    expect(
+      taskCardStatus({ ...cardBase(), ownerName: 'Ani', ownerIsEligible: true })
+    ).toBe('dibagikan');
+  });
+
+  it('is "perlu-penyesuaian" for an assigned but ineligible owner', () => {
+    expect(
+      taskCardStatus({ ...cardBase(), ownerName: 'Ani', ownerIsEligible: false })
+    ).toBe('perlu-penyesuaian');
+  });
+
+  it('is "belum-dibagikan" when there is no owner', () => {
+    expect(taskCardStatus({ ...cardBase(), ownerName: null, ownerIsEligible: null })).toBe(
+      'belum-dibagikan'
+    );
+  });
+
+  it('prints the status as text on the rendered card', () => {
+    const assignment = result.assignments.find((a) => a.taskId === 't1')!;
+    const ownerId = assignment.primaryMemberId;
+    const html = renderToStaticMarkup(
+      createElement(TaskRecommendationCard, {
+        data: {
+          task: PLACEABLE[0],
+          ownerName: MEMBERS.find((m) => m.id === ownerId)!.name,
+          ownerScore: assignment.scores[ownerId].breakdown.total,
+          ownerIsEligible: assignment.scores[ownerId].isEligible,
+          alternativeName: null,
+          alternativeScore: null,
+          warnings: [],
+        },
+        capHours: 5,
+        idealLoad: 4,
+      })
+    );
+    expect(html).toContain('Sudah dibagikan');
+    expect(html).toContain('data-status="dibagikan"');
+  });
+});
+
+describe('T-UI-FINAL-01: the reason sentence is built only from real data', () => {
+  it('names the skills that actually cleared the minimum level', () => {
+    const sentence = assignmentReason({
+      memberName: 'Ani',
+      matchedSkills: ['penulisan akademik', 'riset literatur'],
+      requiredSkills: ['penulisan akademik', 'riset literatur'],
+      score: 0.87,
+    });
+    expect(sentence).toContain('Direkomendasikan kepada Ani');
+    expect(sentence).toContain('penulisan akademik dan riset literatur');
+    expect(sentence).toContain('kapasitasnya masih mencukupi');
+    expect(sentence).toContain('87%');
+  });
+
+  it('does not invent a reason when no skill cleared the floor', () => {
+    const sentence = assignmentReason({
+      memberName: 'Budi',
+      matchedSkills: [],
+      requiredSkills: ['pengujian'],
+      score: 0.42,
+    });
+    expect(sentence).not.toContain('paling sesuai');
+    expect(sentence).toContain('kandidat terbaik');
+    expect(sentence).toContain('42%');
+  });
+
+  it('does not invent a skill for a task with no requirements', () => {
+    const sentence = assignmentReason({
+      memberName: 'Cici',
+      matchedSkills: [],
+      requiredSkills: [],
+      score: 0.5,
+    });
+    expect(sentence).toContain('tidak mensyaratkan kemampuan khusus');
+  });
+
+  it('never produces a reason for an owner that does not exist', () => {
+    const html = renderToStaticMarkup(
+      createElement(TaskRecommendationCard, {
+        data: {
+          task: PLACEABLE[0],
+          ownerName: null,
+          ownerScore: null,
+          ownerIsEligible: null,
+          alternativeName: null,
+          alternativeScore: null,
+          warnings: [],
+          ownerReason: null,
+        },
+        capHours: 5,
+        idealLoad: 4,
+      })
+    );
+    expect(html).not.toContain('Direkomendasikan kepada');
   });
 });

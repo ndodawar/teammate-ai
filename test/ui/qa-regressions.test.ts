@@ -228,7 +228,8 @@ describe('T-FINAL-QA-01: the task card marks an unqualified owner inline', () =>
   it('prints no unqualified label when there is no owner at all', () => {
     const html = cardFor(null);
     expect(html).not.toContain('Belum memenuhi aturan');
-    expect(html).toContain('Tidak layak dialokasikan');
+    // T-UI-FINAL-01: the unassigned card states the outcome in user language.
+    expect(html).toContain('Belum dapat dibagikan');
   });
 });
 

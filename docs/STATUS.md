@@ -4282,3 +4282,74 @@ Pengujian yang menghabiskan kuota: **hanya** tes live bawaan di atas. Seluruh pe
 ### Putusan
 
 **4 bug diperbaiki pada akar penyebabnya** (2×P1, 2×P2) dan satu risiko pemborosan kuota (P2) ditutup. Tidak ada bug P0. Rumus, bobot, dan R1–R5 tidak diubah dan terverifikasi terhadap PRD 8.4 secara numerik. `npm test` 507 lulus / 0 gagal (7 tes live kini opt-in), typecheck 0 error, lint 0 error, build berhasil. Pengujian browser dan deployment **BLOCKED** dan tidak diklaim. Sekitar sembilan permintaan Groq nyata tercatat dan dilaporkan sebagai pelanggaran aturan sesi, tidak disembunyikan.
+
+---
+
+## T-UI-FINAL-01 — Halaman hasil dibaca dalam 10 detik
+
+Tanggal: sesi 2026-02. Status: **selesai di kode, belum di-commit.** Perubahan ada di working tree pada branch `redesign/fuelplate-ui`.
+
+### 1. Masalah yang diselesaikan
+
+Halaman hasil sebelumnya menang untuk demo teknis tetapi kalah untuk pembaca pertama. Judulnya masih "matriks", angka K/S/C/M memimpin, dan kode aturan ("GUGUR R2") menjadi kalimat utama. Seorang mahasiswa yang membuka halaman ini ingin tahu tiga hal: tugas saya apa, siapa mengerjakannya, dan kalau belum ada yang mengerjakan, kenapa. Tidak satu pun dari tiga itu yang tampil lebih dulu.
+
+Perubahan ini membalik urutan itu tanpa menyentuh mesin penilaian. Tidak ada rumus K/S/C/M, bobot 40/30/20/10, atau aturan R1–R5 yang diubah. Tidak ada angka statis yang menggantikan hasil sungguhan, dan tidak ada panggilan Groq/Gemini untuk urusan tampilan.
+
+### 2. Berkas yang diubah
+
+Tiga berkas implementasi dan tiga berkas tes, semuanya dalam batas lima berkas implementasi.
+
+| Berkas | Perubahan |
+|---|---|
+| `components/recommendations/result-dashboard.tsx` | Kosakata bahasa pengguna, `loadStanding()`, `StatusPill`, `taskCardStatus()`, `assignmentReason()`; `ResultSummary`, `ScoreDetail`, `MemberLoadRow`, `TaskRecommendationCard` ditulis ulang |
+| `app/p/[code]/result/result-client.tsx` | Judul dan deskripsi baru, banner R1–R5 dalam bahasa biasa beserta `hint`, alasan per kartu, tata letak ringkasan, tab "Ringkasan hasil"/"Matriks lengkap", blok `<details>` R1–R5 |
+| `components/recommendations/candidate-score-chart.tsx` | Batang 12px, nama 13px, skor 15px, pil kelayakan + alasan, `candidateEligibilityPlain()`, legenda dan catatan baru |
+| `test/ui/result-dashboard.test.ts` | Fixture disesuaikan dengan copy baru, ditambah blok T-UI-FINAL-01 (kosakata, disclosure, `loadStanding`, status kartu, kalimat alasan) |
+| `test/ui/candidate-score-chart.test.ts` | 3 asersi disesuaikan dengan label bahasa pengguna |
+| `test/ui/qa-regressions.test.ts` | 1 asersi disesuaikan ("Belum dapat dibagikan") |
+
+### 3. Perubahan tampilan
+
+**Judul dan indikator.** H1 menjadi "Hasil Pembagian Tugas" dengan deskripsi "Sistem menganalisis kemampuan, minat, dan kapasitas anggota untuk memberikan rekomendasi pembagian tugas yang lebih terukur." Empat indikator: total tugas, total anggota, tugas berhasil dibagikan, tugas perlu penyesuaian. Persentase penyelesaian hanya muncul bila `totalTasks > 0`; proyek kosong tidak mencetak "0%" karena itu akan mengklaim pengukuran yang tidak pernah dilakukan.
+
+**Kartu tugas sebagai fokus.** Setiap kartu dibuka dengan status eksplisit, salah satu dari tiga nilai: "Sudah dibagikan", "Perlu penyesuaian", atau "Belum dapat dibagikan". Nama pemilik adalah teks terbesar di kartu (17px). Skor kecocokan dan alternatif duduk di kolom terpisah. Alasan ditulis sebagai kalimat: "Direkomendasikan kepada Ani karena kemampuan penulisan akademik dan riset literatur paling sesuai dengan kebutuhan tugas ini, dan kapasitasnya masih mencukupi."
+
+**Tugas tanpa pemilik.** Tidak ada lagi halaman kosong atau "GUGUR R2" sebagai judul. Kartu menulis "Belum dapat dibagikan", lalu satu kalimat yang membandingkan estimasi dengan batas, misalnya "Estimasi pekerjaan membutuhkan 8 jam, sedangkan batas beban yang diizinkan 5.00 jam." Empat angka menyusul dengan label: total estimasi, beban ideal, batas beban, selisih. Tombol "Pecah tugas" hanya muncul pada banner R2 karena fitur itu memang ada di halaman ini. Kode `R2` tetap tampil, kecil, di bawah kalimat.
+
+**Kosakata.** K menjadi "Kemiripan kebutuhan tugas", S "Kesesuaian kemampuan", C "Ketersediaan kapasitas", M "Minat anggota". R1 "Anggota tidak memiliki waktu tersedia.", R2 "Beban kerja melebihi batas.", R3 "Belum ada anggota dengan kemampuan minimum yang dibutuhkan.", R4 "Setiap tugas hanya memiliki satu penanggung jawab.", R5 "Tugas ini dikunci dan tidak akan berubah otomatis."
+
+**Rincian teknis dipindah ke disclosure.** Nilai K/S/C/M, bobot, kontribusi per komponen, rumus skor berbobot, cara beban ideal dihitung, batas beban R2, dan teks R1–R5 semuanya masih ada, tetapi di balik "Lihat rincian perhitungan" pada tiap kartu dan satu blok `<details>` di bawah tampilan ringkasan. Tidak ada yang dihapus, hanya dipindah dari jalur baca utama.
+
+**Beban anggota.** Setiap anggota mendapat nama, beban terpasang, kapasitas, batas beban, progress bar, dan status tiga nilai: "Dalam batas", "Mendekati batas" (≥80% batas), "Melebihi batas". Seluruhnya dalam jam dan dihitung dari `memberLoads` keluaran mesin. Status ditandai glif berbeda (`✓`/`!`/`×`) plus teks, tidak pernah warna saja.
+
+**Dua tampilan.** "Ringkasan hasil" untuk presentasi, "Matriks lengkap" untuk seluruh perhitungan. Keduanya membaca `currentResult` yang sama; tidak ada fetch kedua dan tidak ada perhitungan ulang. Tampilan bawaan tetap `ringkasan`, sehingga ponsel tidak pernah menerima tabel lebar secara default. Slider bobot, what-if, tukar, kunci, undo, dan ekspor tetap berfungsi seperti sebelumnya.
+
+### 4. Hasil gerbang mutu
+
+| Gerbang | Perintah | Hasil |
+|---|---|---|
+| Tes deterministik | `npx vitest run --exclude "**/*.live.test.ts"` | **33 berkas / 525 tes lulus**, 0 gagal |
+| Typecheck | `npx tsc --noEmit` | **0 error** |
+| Lint | `npm run lint` | **0 error**, 26 warning (semuanya sudah ada sebelumnya) |
+| Build | `npx next build` | **berhasil**, 12 rute |
+
+Tes naik dari 498 menjadi 525 karena blok T-UI-FINAL-01 menambah 27 tes. Satu warning sempat muncul dari perubahan ini (`ownerIsEligible` di-destructure tetapi tidak lagi dibaca setelah status dipusatkan di `taskCardStatus`); sudah dihapus, jadi jumlah warning kembali ke 26.
+
+Tes dijalankan dengan `--exclude "**/*.live.test.ts"`, sehingga **tidak ada permintaan API nyata** pada sesi ini. Kuota Groq/Gemini tidak tersentuh.
+
+### 5. Pengujian browser
+
+**BLOCKED — tidak diklaim berhasil.** Alatnya masih tidak tersedia: tidak ada Playwright, Puppeteer, Cypress, jsdom, atau happy-dom di `node_modules`, dan `firefox` di `/usr/bin` tetap stub snap yang gagal. Karena itu **tidak ada screenshot** yang bisa dilampirkan, dan alur klik sungguhan belum dijalankan.
+
+Yang benar-benar diverifikasi: komponen dirender ke markup statis lewat `renderToStaticMarkup` pada semua skenario di atas, dan 525 tes lulus termasuk seluruh logika mesin. Yang belum: tampilan sesungguhnya di layar, perilaku klik, dan pembacaan di proyektor.
+
+### 6. Yang belum selesai
+
+- **Verifikasi visual.** BLOCKED, alasan di atas. Perlu dijalankan pengguna dengan `npm run dev`.
+- **Deployment Vercel.** BLOCKED, tidak ada URL atau config di repo.
+- **Commit dan push.** Tidak dilakukan, sesuai instruksi.
+- **Pemeriksaan ponsel.** Tata letak memakai `grid` satu kolom di bawah `sm` dan dua kolom di `xl`, tetapi belum dilihat di perangkat sungguhan.
+
+### Putusan
+
+Tiga berkas implementasi diubah, enam berkas total bersama tes. Mesin penilaian, bobot, dan R1–R5 tidak disentuh, dan tidak ada kalimat alasan yang dibentuk dari data yang tidak ada: alasan hanya dibuat bila `assignment.scores[owner.id]?.isEligible` benar, sedangkan pemilik hasil fallback R3 mendapat kalimat "saran terbaik, belum memenuhi kemampuan minimum" alih-alih pujian. Semua gerbang lulus (525 tes, 0 error typecheck, 0 error lint, build 12 rute). Verifikasi browser dan screenshot **BLOCKED**, dilaporkan apa adanya.
