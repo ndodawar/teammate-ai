@@ -549,6 +549,104 @@ export function describeR2(load: number, idealLoad: number, capacity: number): s
   return `Dalam batas R2 (${r2Limit.toFixed(2)} jam).`;
 }
 
+/**
+ * R2 in the words a user can act on: effort, ideal load, cap, and the excess.
+ *
+ * The matrix used to say only "R2: semua gugur", which named the rule but not
+ * the problem. This states the four numbers the reader needs to judge the task,
+ * and computes the excess from them rather than accepting it as an argument, so
+ * the difference can never disagree with the cap.
+ */
+export function describeOverCap(input: {
+  taskHours: number;
+  idealLoad: number;
+  capHours: number;
+}): { excessHours: number; summary: string } {
+  const excessHours = Number((input.taskHours - input.capHours).toFixed(2));
+  const summary =
+    `Usaha tugas ${input.taskHours} jam. Beban ideal ${input.idealLoad.toFixed(2)} jam. ` +
+    `Batas R2 ${input.capHours.toFixed(2)} jam (1,25 × beban ideal). ` +
+    `Selisih ${excessHours.toFixed(2)} jam melebihi batas.`;
+  return { excessHours, summary };
+}
+
+/** One row of a user-defined task split. Only hours are required to be set. */
+export interface SplitPart {
+  hours: string;
+}
+
+export interface SplitValidation {
+  ok: boolean;
+  /** Sum of the parsed hours, for display next to the parent effort. */
+  total: number;
+  /** Parent effort minus the sum; positive means the split is short. */
+  remaining: number;
+  /** Per-row message, keyed by row index. Empty when a row is usable. */
+  rowErrors: Record<number, string>;
+  /** Message about the split as a whole. */
+  error?: string;
+}
+
+/**
+ * Validates a user-authored split against the parent task's effort.
+ *
+ * The total must equal the parent exactly. A split that quietly adds or drops
+ * hours would change the workload the recommendation is built on, so it is
+ * rejected rather than adjusted: guessing the missing hours is exactly the
+ * fabricated estimate the rules forbid. Every subtask the user creates also has
+ * to be smaller than the parent, otherwise splitting achieves nothing.
+ */
+export function validateSplit(parts: SplitPart[], parentHours: number): SplitValidation {
+  const rowErrors: Record<number, string> = {};
+  const parsed: number[] = [];
+
+  parts.forEach((part, index) => {
+    const raw = part.hours.trim();
+    if (raw === '') {
+      rowErrors[index] = 'Estimasi jam wajib diisi.';
+      return;
+    }
+    const value = Number(raw);
+    if (!Number.isFinite(value)) {
+      rowErrors[index] = 'Estimasi jam harus berupa angka.';
+      return;
+    }
+    if (!Number.isInteger(value)) {
+      rowErrors[index] = 'Estimasi jam harus bilangan bulat.';
+      return;
+    }
+    if (value <= 0) {
+      rowErrors[index] = 'Estimasi jam harus lebih dari 0.';
+      return;
+    }
+    if (value >= parentHours) {
+      rowErrors[index] = `Tiap bagian harus lebih kecil dari estimasi induk (${parentHours} jam).`;
+      return;
+    }
+    parsed.push(value);
+  });
+
+  const total = Number(parsed.reduce((sum, value) => sum + value, 0).toFixed(2));
+  const remaining = Number((parentHours - total).toFixed(2));
+
+  if (Object.keys(rowErrors).length > 0) {
+    return { ok: false, total, remaining, rowErrors };
+  }
+  if (remaining !== 0) {
+    return {
+      ok: false,
+      total,
+      remaining,
+      rowErrors,
+      error:
+        remaining > 0
+          ? `Total ${total} jam, kurang ${remaining} jam dari estimasi induk ${parentHours} jam.`
+          : `Total ${total} jam, lebih ${Math.abs(remaining)} jam dari estimasi induk ${parentHours} jam.`,
+    };
+  }
+  return { ok: true, total, remaining, rowErrors };
+}
+
 export function taskTitleMap(tasks: Task[]): Record<string, string> {
   return Object.fromEntries(tasks.map((t) => [t.id, t.title]));
 }

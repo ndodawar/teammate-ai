@@ -18,6 +18,8 @@ import {
   toPlainText,
   compareSnapshots,
   describeR2,
+  describeOverCap,
+  validateSplit,
   smallestSplitThatFits,
   weightSumLabel,
   weightSumIsExact,
@@ -100,6 +102,21 @@ export function ResultClient({ params }: { params: Promise<{ code: string }> }) 
   const [moveTarget, setMoveTarget] = useState<{ taskId: string; memberId: string } | null>(null);
   const [swapAnchor, setSwapAnchor] = useState<string | null>(null);
   const [showComparison, setShowComparison] = useState(false);
+
+  /**
+   * T-FIX-R2-02 point 3: the split flow.
+   *
+   * The database has no parent/subtask column (`tasks` in migration 001 has no
+   * hierarchy) and `Task` carries none either, so this does NOT introduce one.
+   * A split is expressed with the mechanism that already exists: the user
+   * authors N plain tasks through the same POST the task page uses, and the
+   * total must equal the parent's hours exactly. `splitParentId` only identifies
+   * which row opened the panel; it is not persisted anywhere.
+   */
+  const [splitParentId, setSplitParentId] = useState<string | null>(null);
+  const [splitRows, setSplitRows] = useState<{ hours: string }[]>([{ hours: '' }, { hours: '' }]);
+  const [splitError, setSplitError] = useState<string | null>(null);
+  const [splitSubmitting, setSplitSubmitting] = useState(false);
 
   const isInitialFetchDone = useRef(false);
   const tableRef = useRef<HTMLTableElement | null>(null);
@@ -323,6 +340,67 @@ export function ResultClient({ params }: { params: Promise<{ code: string }> }) 
   // Ends a slider drag: the next drag snapshots the state again.
   const endWeightDrag = () => {
     weightUndoRef.current = null;
+  };
+
+  /**
+   * Creates the subtasks the user described, then recomputes.
+   *
+   * Only the hours are authored here. Title, description and skills are taken
+   * from the parent task so nothing is invented: the description is the parent's
+   * own text, and the user edits it afterwards on the task page if a slice needs
+   * its own wording. The total is checked by `validateSplit` before any request
+   * is sent, because a split that silently adds or drops hours would change the
+   * workload every later score is based on.
+   */
+  const submitSplit = async () => {
+    // Read from state rather than taking arguments: passing render values into
+    // a handler defined in the render body tripped the compiler's ref check.
+    const parent = splitParentId ? taskById.get(splitParentId) : undefined;
+    const parts = splitRows;
+    if (!parent) return;
+    const validation = validateSplit(parts, parent.estimated_hours);
+    if (!validation.ok) {
+      setSplitError(
+        validation.error ?? Object.values(validation.rowErrors)[0] ?? 'Pembagian tugas belum sah.'
+      );
+      return;
+    }
+
+    setSplitError(null);
+    setSplitSubmitting(true);
+    try {
+      for (const [index, part] of parts.entries()) {
+        const res = await fetch(`/api/projects/${encodeURIComponent(resolvedCode)}/tasks`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: `${parent.title} (bagian ${index + 1})`,
+            // The parent's own description, never a generated one.
+            description: parent.description?.trim() || parent.title,
+            estimated_hours: Number(part.hours),
+            required_skills: parent.required_skills,
+            effort: parent.difficulty,
+            source: 'manual',
+          }),
+        });
+        if (!res.ok) {
+          const json = await res.json().catch(() => ({}));
+          throw new Error(json.error || 'Gagal membuat subtugas.');
+        }
+      }
+
+      setStatus({
+        kind: 'ok',
+        text: `${parts.length} subtugas dibuat. Skor dihitung ulang untuk tiap subtugas; tugas induk tetap ${parent.estimated_hours} jam, jadi hapus atau sesuaikan bila sudah tidak dipakai.`,
+      });
+      setSplitParentId(null);
+      setSplitRows([{ hours: '' }, { hours: '' }]);
+      await fetchInitialData(resolvedCode);
+    } catch (error) {
+      setSplitError(error instanceof Error ? error.message : 'Gagal membuat subtugas.');
+    } finally {
+      setSplitSubmitting(false);
+    }
   };
 
   const applyOwnerChange = (
@@ -813,24 +891,24 @@ export function ResultClient({ params }: { params: Promise<{ code: string }> }) 
          * is computed from the same numbers the engine used, not written by hand.
          */
         const feasibleSplit = smallestSplitThatFits(w.taskHours, w.capHours);
-        const splitHint =
-          feasibleSplit !== null
-            ? `Pecah tugas menjadi minimal ${feasibleSplit} bagian, misalnya ` +
-              `${feasibleSplit} × ${(w.taskHours / feasibleSplit).toFixed(1)} jam, agar tiap bagian ` +
-              `tidak melebihi batas ${w.capHours.toFixed(2)} jam.`
-            : `Pecah tugas menjadi beberapa bagian yang masing-masing tidak melebihi ` +
-              `${w.capHours.toFixed(2)} jam.`;
+        const overCapText = describeOverCap({
+          taskHours: w.taskHours,
+          idealLoad: w.idealLoad,
+          capHours: w.capHours,
+        });
 
         items.push({
           key: 'r2-impossible',
           tone: 'danger',
-          headline: 'Estimasi usaha melebihi batas beban yang diizinkan',
+          headline: 'Tidak layak dialokasikan',
           detail:
-            `${impossible.length} tugas lebih besar daripada batas R2 ` +
-            `(${w.capHours.toFixed(2)} jam = 1,25 × beban ideal ${w.idealLoad.toFixed(2)} jam), ` +
-            `misalnya ${w.taskHours} jam. Tidak ada anggota yang dapat menerimanya tanpa melanggar R2, ` +
-            `jadi tugas itu dibiarkan tanpa penanggung jawab (pengecualian R4). ` +
-            splitHint +
+            `Tugas belum dapat dialokasikan karena estimasi usaha melebihi batas beban anggota. ` +
+            `Pecah tugas menjadi beberapa subtugas atau periksa kembali estimasi usahanya. ` +
+            `${overCapText.summary}` +
+            (feasibleSplit !== null
+              ? ` Tiap bagian harus di bawah ${w.capHours.toFixed(2)} jam, jadi minimal ` +
+                `${feasibleSplit} bagian.`
+              : '') +
             ` Menambah anggota tidak menyelesaikan masalah ini: beban ideal dihitung dari ` +
             `total jam dibagi jumlah anggota, sehingga anggota bertambah justru membuat ` +
             `batas R2 makin kecil.`,
@@ -894,6 +972,15 @@ export function ResultClient({ params }: { params: Promise<{ code: string }> }) 
 
       return items;
     })();
+
+  /*
+   * The task the "r2-impossible" banner is about, so its "Pecah tugas" button
+   * opens the panel for that exact task rather than making the reader hunt for
+   * the row. Derived from the same warnings, so it cannot point elsewhere.
+   */
+  const impossibleTaskId =
+    currentResult.warnings.find((w) => w.code === 'r2_no_candidate' && w.detail?.exceedsCapAlone)
+      ?.taskId ?? null;
 
   const changedNow = new Set(rowChanges.map((c) => c.taskId));
   const previewAssignment = preview ? resultFor(preview.taskId, displayed) : null;
@@ -1151,6 +1238,42 @@ export function ResultClient({ params }: { params: Promise<{ code: string }> }) 
                 tekan L untuk mengunci, atau geser bobot untuk menghitung ulang di browser.
               </p>
               {/*
+                T-FIX-R2-02. The matrix used to be the only place a reader could
+                learn the R2 cap, and only after scrolling to a row. The two
+                figures below come straight from the engine (`idealLoad` and the
+                same 1.25 multiplier `globalAssign` applies), so the summary can
+                never drift from the rule actually enforced. It sits above the
+                table so the basis of every eligibility decision is visible
+                before the first score is read.
+              */}
+              <dl
+                className="flex flex-wrap items-baseline gap-x-4 gap-y-1 pt-1 font-mono text-[11px] tabular-nums text-muted"
+                data-testid="load-limit-summary"
+                data-numeric
+              >
+                <div className="flex items-baseline gap-1.5">
+                  <dt className="font-sans">Beban ideal</dt>
+                  <dd className="text-ink">{currentResult.idealLoad.toFixed(2)} jam</dd>
+                </div>
+                <div className="flex items-baseline gap-1.5">
+                  <dt className="font-sans">Batas R2 per anggota</dt>
+                  <dd className="text-ink">
+                    {(currentResult.idealLoad * WORKLOAD_CAP_MULTIPLIER).toFixed(2)} jam
+                  </dd>
+                </div>
+                <div className="flex items-baseline gap-1.5">
+                  <dt className="font-sans">Hitungan</dt>
+                  <dd>1,25 × beban ideal</dd>
+                </div>
+              </dl>
+              <p className="max-w-[70ch] text-[11.5px] leading-relaxed text-muted">
+                <span className="font-medium text-ink">Skor kecocokan</span> hanya informasi
+                perbandingan antar anggota. Skor tidak menjamin penugasan: anggota dengan skor
+                tertinggi tetap tidak dipilih bila melanggar batas R2, jam tersedia, atau aturan
+                lain. Yang menentukan penanggung jawab adalah{' '}
+                <span className="font-medium text-ink">status kelayakan</span> pada tiap baris.
+              </p>
+              {/*
                 Workload summary (T-5.04). The window's `play` move is the one
                 motion beat on this page, and it is a single one-shot reveal of
                 already-computed numbers, not a repeating animation: the reader
@@ -1214,6 +1337,24 @@ export function ResultClient({ params }: { params: Promise<{ code: string }> }) 
                     {s.headline}
                   </p>
                   <p className="mt-0.5">{s.detail}</p>
+                  {/* T-FIX-R2-02: when the problem is an oversized task, the
+                      next step is to split it. The button opens the panel for the
+                      task the banner is about, so the reader does not have to
+                      find the row themselves. */}
+                  {s.key === 'r2-impossible' && impossibleTaskId && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSplitParentId(impossibleTaskId);
+                        setSplitRows([{ hours: '' }, { hours: '' }]);
+                        setSplitError(null);
+                        setDetailTaskId(impossibleTaskId);
+                      }}
+                      className="mt-1.5 rounded-full bg-card px-2.5 py-1 text-[11px] font-semibold text-danger shadow-[inset_0_0_0_1px_var(--danger)] transition-colors duration-200 hover:bg-danger-surface"
+                    >
+                      Pecah tugas
+                    </button>
+                  )}
                 </li>
               ))}
             </ul>
@@ -1333,6 +1474,10 @@ export function ResultClient({ params }: { params: Promise<{ code: string }> }) 
                   <th scope="col" className="sticky left-0 z-20 w-[190px] bg-mist px-3 py-2.5 font-medium">
                     Tugas
                   </th>
+                  {/* T-FIX-R2-02 point 1: the member columns are labelled for what
+                      they hold (a comparison score) and the action column for the
+                      decision (eligibility and owner), so a high percentage is not
+                      read as an appointment. */}
                   {members.map((member) => (
                     <th
                       key={member.id}
@@ -1343,7 +1488,7 @@ export function ResultClient({ params }: { params: Promise<{ code: string }> }) 
                         {member.name}
                       </span>
                       <span className="block font-mono text-[9.5px] font-normal normal-case tabular-nums text-muted" data-numeric>
-                        {member.capacity} jam
+                        {member.capacity} jam · skor kecocokan
                       </span>
                     </th>
                   ))}
@@ -1355,7 +1500,7 @@ export function ResultClient({ params }: { params: Promise<{ code: string }> }) 
                       its own (`min-w-[760px]`), so the extra width costs nothing
                       on a narrow screen. */}
                   <th scope="col" className="w-[210px] px-3 py-2.5 font-semibold">
-                    Aksi
+                    Status kelayakan · penanggung jawab
                   </th>
                 </tr>
               </thead>
@@ -1510,6 +1655,21 @@ export function ResultClient({ params }: { params: Promise<{ code: string }> }) 
                               >
                                 {candidateStatusLabel(cellStatus)}
                               </span>
+                              {/*
+                                T-FIX-R2-02 point 4: the reason lives on the
+                                member's own row, not only in the panel below.
+                                The text is the engine's warning verbatim, so the
+                                cell cannot claim a different cause than the one
+                                that actually excluded this member.
+                              */}
+                              {score && !score.isEligible && (score.warnings ?? []).length > 0 && (
+                                <span
+                                  className="block max-w-[13ch] text-[8.5px] leading-tight normal-case tracking-normal"
+                                  data-testid={`reason-${task.id}-${member.id}`}
+                                >
+                                  {(score.warnings ?? [])[0]}
+                                </span>
+                              )}
                               <span
                                 aria-hidden="true"
                                 className={`block h-[2px] w-8 rounded-full ${isPrimary ? 'bg-[var(--accent)]' : 'bg-cloud'}`}
@@ -1612,6 +1772,27 @@ export function ResultClient({ params }: { params: Promise<{ code: string }> }) 
                               }`}
                             >
                               {swapAnchor ? (swapAnchor === task.id ? 'Dipilih' : 'Tukar dengan') : 'Tukar'}
+                            </button>
+
+                            {/*
+                              T-FIX-R2-02: splitting is offered on every row, not
+                              only on infeasible ones. A task that is merely
+                              awkward to place (or that the user simply wants to
+                              break up) can be divided from here.
+                            */}
+                            <button
+                              type="button"
+                              data-testid={`split-${task.id}`}
+                              onClick={() => {
+                                setSplitParentId(task.id);
+                                setSplitRows([{ hours: '' }, { hours: '' }]);
+                                setSplitError(null);
+                                setDetailTaskId(task.id);
+                              }}
+                              aria-expanded={splitParentId === task.id}
+                              className="inline-flex h-7 items-center rounded-full bg-card px-2 text-[10px] font-medium text-ink shadow-[inset_0_0_0_1px_var(--line-strong)] transition-colors duration-200 hover:shadow-[inset_0_0_0_1px_var(--ink)]"
+                            >
+                              Pecah
                             </button>
                           </div>
 
@@ -1795,6 +1976,121 @@ export function ResultClient({ params }: { params: Promise<{ code: string }> }) 
               })()}
             </section>
           )}
+
+          {/*
+            T-FIX-R2-02 point 3: "Pecah tugas".
+            The user picks how the hours are divided; nothing is divided for
+            them. The total must match the parent effort exactly or the split is
+            refused, because changing the total would change the workload every
+            score is built on. This reuses the existing task POST, so no
+            hierarchy was added to the schema or the engine.
+          */}
+          {splitParentId && taskById.get(splitParentId) && (() => {
+            const parent = taskById.get(splitParentId)!;
+            const validation = validateSplit(splitRows, parent.estimated_hours);
+            return (
+              <section
+                data-testid="split-panel"
+                className="mt-2 rounded-[var(--radius-card)] bg-card p-4 shadow-[inset_0_0_0_1px_var(--line)]"
+              >
+                <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-line pb-2">
+                  <h2 className="heading text-[14px] text-ink">Pecah tugas: {parent.title}</h2>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSplitParentId(null);
+                      setSplitError(null);
+                    }}
+                    className="rounded-full px-2 py-0.5 text-[11px] text-muted transition-colors duration-200 hover:bg-mist hover:text-ink"
+                  >
+                    Tutup
+                  </button>
+                </div>
+
+                <p className="pt-2 text-[11.5px] leading-relaxed text-muted">
+                  Estimasi tugas induk <span className="font-mono tabular-nums text-ink" data-numeric>{parent.estimated_hours} jam</span>.
+                  Tentukan sendiri pembagian jamnya. Total semua bagian harus tepat{' '}
+                  {parent.estimated_hours} jam; sistem tidak menambah atau mengurangi jam untuk Anda.
+                  Setiap bagian disimpan sebagai tugas biasa dengan judul, deskripsi, dan skill yang
+                  sama seperti induk, lalu skornya dihitung ulang satu per satu.
+                </p>
+
+                <ul className="space-y-1.5 pt-2">
+                  {splitRows.map((row, index) => (
+                    <li key={index} className="flex items-center gap-2">
+                      <span className="w-16 shrink-0 text-[11.5px] text-muted">Bagian {index + 1}</span>
+                      <input
+                        type="number"
+                        min={1}
+                        max={parent.estimated_hours - 1}
+                        step={1}
+                        value={row.hours}
+                        aria-label={`Estimasi jam bagian ${index + 1}`}
+                        aria-invalid={validation.rowErrors[index] ? true : undefined}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          setSplitRows((prev) =>
+                            prev.map((r, i) => (i === index ? { hours: value } : r))
+                          );
+                          setSplitError(null);
+                        }}
+                        className="h-8 w-24 rounded-lg bg-card px-2 font-mono text-[12px] tabular-nums text-ink shadow-[inset_0_0_0_1px_var(--line-strong)] focus:outline-none focus-visible:outline-2 focus-visible:outline-[var(--accent)]"
+                        data-numeric
+                      />
+                      <span className="text-[11px] text-muted">jam</span>
+                      {validation.rowErrors[index] && (
+                        <span className="text-[11px] text-danger">{validation.rowErrors[index]}</span>
+                      )}
+                      {splitRows.length > 2 && (
+                        <button
+                          type="button"
+                          onClick={() => setSplitRows((prev) => prev.filter((_, i) => i !== index))}
+                          className="rounded-full px-2 py-0.5 text-[11px] text-muted hover:bg-mist hover:text-ink"
+                        >
+                          Hapus bagian
+                        </button>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+
+                <p className="pt-2 font-mono text-[11px] tabular-nums text-muted" data-numeric>
+                  Total {validation.total} jam ·{' '}
+                  {validation.remaining === 0
+                    ? 'sama dengan estimasi induk'
+                    : validation.remaining > 0
+                      ? `kurang ${validation.remaining} jam dari induk`
+                      : `lebih ${Math.abs(validation.remaining)} jam dari induk`}
+                </p>
+
+                {splitError && (
+                  <p role="alert" className="pt-1 text-[11.5px] font-medium text-danger">
+                    {splitError}
+                  </p>
+                )}
+
+                <div className="flex flex-wrap items-center gap-1.5 pt-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setSplitRows((prev) => [...prev, { hours: '' }])}
+                  >
+                    Tambah bagian
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="solid"
+                    size="sm"
+                    disabled={!validation.ok || splitSubmitting}
+                    onClick={submitSplit}
+                  >
+                    {splitSubmitting ? 'Membuat subtugas…' : 'Buat subtugas'}
+                  </Button>
+                </div>
+              </section>
+            );
+          })()}
 
           {/* FR-14 export + FR-17 comparison */}
           <div className="mt-3 space-y-2 rounded-[var(--radius-card)] bg-card px-4 py-3 shadow-[inset_0_0_0_1px_var(--line)]">

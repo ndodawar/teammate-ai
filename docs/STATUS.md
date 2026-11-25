@@ -3737,3 +3737,299 @@ Typecheck, lint, build:
 yang salah secara matematis ("tambah anggota") diganti dengan saran pembagian tugas yang
 diverifikasi dapat dijalankan, dan setiap anggota memiliki status yang jelas dan tidak
 bergantung pada warna. Tidak ada rekomendasi palsu, R1–R5 tetap berlaku, 280 tes lulus.
+
+---
+
+## T-FIX-API-01: Perbaikan Validasi Deskripsi Tugas
+
+Tanggal kerja: sesi ini. Cakupan: validasi kolom deskripsi tugas pada form, POST, PUT, dan
+endpoint analisis AI. Tidak ada fitur lain yang diubah.
+
+### 1. Ketentuan PRD
+
+PRD v0.3 **US-06** (baris 463) mencantumkan "Deskripsi tugas wajib diisi" sebagai acceptance
+criterion, dan **Bagian 5.1** (baris 688) menetapkan batas 500 karakter. Jadi deskripsi
+bersifat **WAJIB**, bukan opsional. Ketentuan ini ditemukan, sehingga tidak perlu berhenti
+meminta konfirmasi.
+
+### 2. Akar Masalah
+
+Ada **dua bug** yang saling bertentangan, bukan satu:
+
+| Bug | Bukti | Lokasi |
+|---|---|---|
+| Schema form/POST/PUT menganggap deskripsi opsional | `description` memakai `.optional().nullable()`, sehingga `null`, `""`, dan `"   "` semuanya lolos. Form mengirim `null` untuk kotak kosong, jadi tugas tanpa deskripsi tersimpan sebagai NULL | `lib/validation/index.ts` |
+| Schema `/api/analyze-task` mewajibkan deskripsi, tetapi pesannya tidak terbaca | `z.string().min(1)` tanpa pesan khusus, sehingga pengguna menerima teks mentah Zod ("Too small: expected string to have >=1 characters"), dan route mengembalikan "Invalid request payload" | `app/api/analyze-task/route.ts` |
+
+Akibatnya: form membiarkan deskripsi kosong, lalu endpoint analisis menolaknya dengan pesan yang
+tidak dapat dipahami. Selain itu `z.string().min(1)` **tanpa** `.trim()` membuat deskripsi berisi
+spasi saja dianggap valid oleh endpoint analisis, sementara kosong ditolak. Dua schema juga tidak
+konsisten satu sama lain.
+
+### 3. Perbaikan
+
+1. **`taskSchema` (dipakai form, POST, dan PUT) menjadikan deskripsi wajib.**
+   `z.string(...).trim().min(1, 'Deskripsi tugas wajib diisi.').max(500, ...)`.
+   `trim()` dijalankan **sebelum** `min(1)`, sehingga spasi/newline/tab saja ditolak.
+2. **Schema `/api/analyze-task` disamakan** dengan `taskSchema` (trim, pesan yang sama).
+3. **Pesan API menjadi dapat dibaca.** Route analisis kini mengembalikan pesan issue pertama;
+   "Invalid request payload" hanya tersisa sebagai fallback untuk body yang bentuknya sama sekali
+   bukan schema.
+4. **Form mengirim teks apa adanya, bukan `null`.** `description: draft.description.trim()`.
+5. **Error tampil di dekat kolom deskripsi**, bukan hanya banner umum: state `descriptionError`,
+   `<p role="alert">` di bawah textarea, `aria-invalid` + `aria-describedby`, dan garis tepi
+   merah. Pesan hilang begitu pengguna mengisi teks sah.
+6. **Tidak ada deskripsi yang dikarang.** Tidak ada nilai default atau teks otomatis.
+
+### 4. Berkas yang Diubah
+
+| Berkas | Tindakan |
+|---|---|
+| `lib/validation/index.ts` | Diubah: `description` wajib, trim, pesan Indonesia |
+| `app/api/analyze-task/route.ts` | Diubah: schema disamakan, pesan issue pertama dikembalikan |
+| `app/p/[code]/tasks/tasks-client.tsx` | Diubah: kirim deskripsi (bukan null), error per kolom |
+| `test/validation/task.test.ts` | Diubah: +6 tes deskripsi |
+| `test/api/tasks.test.ts` | Diubah: fixture PUT dilengkapi deskripsi, satu tes diperjelas + 1 asersi pesan |
+| `test/ai/analyze-task.test.ts` | Diubah: +2 tes pesan deskripsi |
+| `docs/STATUS.md` | Diubah: bagian ini (append-only) |
+
+3 berkas implementasi (batas 5). Tidak ada dependensi baru. Tidak ada commit atau push.
+
+### 5. Dampak yang Diperiksa
+
+- **Jalur template** (`load_templates` → simpan) tetap sah: seluruh 12 template di
+  `lib/constants/task-templates.ts` sudah memiliki deskripsi berisi teks.
+- **PUT** kini menolak body tanpa deskripsi. Form selalu mengirim payload penuh hasil
+  `taskSchema`, jadi klien nyata tidak terpengaruh. Dua fixture tes PUT yang belum mengirim
+  deskripsi diperbaiki; satu tes ("tanpa estimasi jam") sebelumnya lulus karena alasan yang salah
+  setelah perubahan ini, sehingga ditambah asersi bahwa pesannya memang soal estimasi jam.
+- **`eval/scripts/run_ai_budget.test.ts`** memakai `taskSchema` untuk menguji batas 500 karakter
+  dan tetap valid.
+
+### 6. Hasil Tes (output aktual)
+
+```
+npx vitest run test/scoring test/api test/ui test/validation
+ Test Files  20 passed (20)
+      Tests  286 passed (286)
+```
+
+Sebelumnya 280 tes; bertambah 6 tes baru (4 di `test/validation/task.test.ts` untuk kasus yang
+diminta, 2 di `test/ai/analyze-task.test.ts`). Kasus yang diuji sesuai permintaan:
+
+| Kasus | Hasil |
+|---|---|
+| Deskripsi kosong `""` | ditolak, "Deskripsi tugas wajib diisi." |
+| Deskripsi berisi spasi `"   \n\t "` | ditolak, pesan sama |
+| Deskripsi tidak dikirim | ditolak, pesan sama |
+| Deskripsi `null` | ditolak (form lama mengirim ini) |
+| Deskripsi valid | diterima dan **di-trim** |
+| Tepat 500 karakter | diterima |
+| 501 karakter | ditolak, "Deskripsi tugas maksimal 500 karakter." |
+
+`test/ai/analyze-task.test.ts`: 16 lulus, termasuk dua tes baru yang memastikan endpoint
+mengembalikan "Deskripsi tugas wajib diisi." (bukan "Invalid request payload") untuk deskripsi
+kosong dan deskripsi berisi spasi saja.
+
+Typecheck, lint, build:
+
+| Perintah | Hasil |
+|---|---|
+| `npx tsc --noEmit` | 0 error |
+| `npx eslint` (6 berkas terkait) | 0 error, 0 warning |
+| `npx next build` | berhasil, 12 rute |
+
+### 7. Keterbatasan yang Belum Terselesaikan
+
+- **Verifikasi visual di browser belum dilakukan.** Tidak ada sesi browser di lingkungan ini, jadi
+  posisi pesan di bawah textarea tidak diklaim sudah dilihat di layar. Yang diverifikasi: keluaran
+  schema, keluaran route, markup/atribut aksesibilitas dari kode, typecheck, lint, build.
+- **Tugas lama tanpa deskripsi di database.** Bila sudah ada baris dengan `description` NULL dari
+  sebelum perbaikan, tugas itu tetap tampil. Menyuntingnya akan meminta deskripsi, sesuai PRD.
+  Migrasi data tidak dilakukan karena di luar cakupan dan tidak ada akses database terverifikasi.
+- **`/api/projects` masih memakai "Invalid request payload"** untuk validasi proyek. Itu endpoint
+  proyek, bukan tugas, dan tidak termasuk dalam ticket ini, sehingga tidak diubah.
+
+### Putusan
+
+**SELESAI.** Deskripsi tugas kini wajib di form, POST, PUT, dan endpoint analisis, dengan schema
+yang konsisten, trim sebelum validasi, dan pesan "Deskripsi tugas wajib diisi." yang tampil di
+dekat kolom. Error mentah "Invalid request payload" tidak lagi muncul untuk masalah kolom ini.
+286 tes lulus, typecheck dan lint bersih, build berhasil.
+
+---
+
+## T-FIX-R2-02: Penanganan Tugas Tidak Layak dan Tampilan Matriks
+
+### 1. Akar Masalah
+
+Kasus pada screenshot **berhasil direproduksi persis**: 2 anggota, 1 tugas 8 jam, beban ideal 4 jam,
+batas R2 5 jam, kedua anggota gugur R2, tidak ada penanggung jawab.
+
+```text
+ideal = 4 | cap = 5
+owner = ""  (kosong = tidak dipaksakan)
+budi eligible = false | heri eligible = false
+skor budi = 74.0% | skor heri = 80.2%
+```
+
+**Mesin sudah benar.** `globalAssign` menghitung beban ideal 8/2 = 4 jam, batas R2 1,25 × 4 = 5 jam,
+menolak kedua anggota, dan mengosongkan penanggung jawab. **Tidak ada kecurangan rekomendasi.**
+
+Cacatnya ada pada **penyajian**, bukan matematika:
+
+| Cacat | Akibat yang dilihat pengguna |
+|---|---|
+| Skor dan kelayakan tidak dipisahkan | "83%" dan "86%" tampil menonjol, "GUGUR R2" kecil di bawahnya, sehingga skor terbaca sebagai janji penugasan |
+| Pesan R2 tidak memuat angka | Pengguna melihat "GUGUR R2" tanpa tahu usaha tugas, beban ideal, batas, dan selisihnya |
+| Tidak ada ringkasan batas beban di atas matriks | Batas R2 hanya bisa diketahui setelah menggulir ke baris tertentu |
+| Tidak ada tindakan lanjutan | Pesan menyuruh "pecah tugas" padahal tidak ada tombol atau alur untuk melakukannya |
+
+### 2. Perbaikan
+
+**a. Skor dan kelayakan dipisahkan (poin 1 dan 4).**
+- Kepala kolom anggota kini berbunyi `<nama> / <kapasitas> jam · skor kecocokan`.
+- Kepala kolom aksi diganti dari "Aksi" menjadi **"Status kelayakan · penanggung jawab"**.
+- Ditambahkan paragraf penjelas di bawah judul: *"Skor kecocokan hanya informasi perbandingan antar
+  anggota. Skor tidak menjamin penugasan: anggota dengan skor tertinggi tetap tidak dipilih bila
+  melanggar batas R2, jam tersedia, atau aturan lain. Yang menentukan penanggung jawab adalah status
+  kelayakan pada tiap baris."*
+- **Ringkasan batas beban** (`data-testid="load-limit-summary"`) di atas tabel: beban ideal,
+  batas R2 per anggota, dan hitungan 1,25 × beban ideal. Angkanya dibaca langsung dari
+  `currentResult.idealLoad` dan `WORKLOAD_CAP_MULTIPLIER`, jadi tidak mungkin berbeda dari aturan
+  yang benar-benar dijalankan mesin.
+
+**b. Pesan R2 memuat empat angka (poin 2).**
+Fungsi `describeOverCap` di `lib/scoring/interaction.ts` menghasilkan:
+
+```text
+Usaha tugas 8 jam. Beban ideal 4.00 jam. Batas R2 5.00 jam (1,25 × beban ideal). Selisih 3.00 jam melebihi batas.
+```
+
+`excessHours` **dihitung** dari `taskHours - capHours`, bukan diterima sebagai argumen, sehingga
+selisih tidak mungkin bertentangan dengan angka di sebelahnya. Judul banner menjadi
+**"Tidak layak dialokasikan"**, dan kalimat yang diminta muncul apa adanya:
+
+> Tugas belum dapat dialokasikan karena estimasi usaha melebihi batas beban anggota. Pecah tugas
+> menjadi beberapa subtugas atau periksa kembali estimasi usahanya.
+
+Kalimat lama yang menyesatkan ("tambah anggota agar beban ideal naik") sudah dihapus pada
+T-FIX-MATRIX-01; yang tersisa justru menjelaskan mengapa menambah anggota **memperburuk** keadaan.
+
+**c. Alasan R2 pada baris anggota (poin 4).**
+Tiap sel anggota yang tidak layak kini menampilkan `score.warnings[0]` **apa adanya dari mesin**
+(`data-testid="reason-<taskId>-<memberId>"`), misalnya
+`R2: beban 8.00 jam melebihi batas 5.00 jam (1,25 × beban ideal).`
+Teksnya tidak ditulis ulang di UI, jadi sel tidak bisa mengklaim sebab yang berbeda dari yang
+benar-benar menggugurkan anggota tersebut.
+
+### 3. Alur "Pecah tugas" (poin 3)
+
+**Struktur yang diperiksa lebih dulu.** Tabel `tasks` di `supabase/migrations/001_initial_schema.sql`
+**tidak memiliki** kolom induk/subtugas, dan tipe `Task` di `lib/scoring/types.ts` juga tidak memiliki
+hierarki. Sesuai instruksi ticket ("jangan membuat arsitektur baru"), hierarki **tidak dibuat**.
+
+**Mekanisme yang dipakai:** POST tugas yang sudah ada (`/api/projects/[code]/tasks`).
+- Tombol **"Pecah tugas"** tersedia di dua tempat: pada banner R2 (langsung membuka panel untuk tugas
+  yang dimaksud) dan sebagai tombol **"Pecah"** pada setiap baris matriks.
+- Panel menampilkan estimasi induk, N baris jam yang **diisi sendiri oleh pengguna**, total berjalan,
+  serta tombol tambah/hapus bagian.
+- `validateSplit` (`lib/scoring/interaction.ts`) menolak: baris kosong, bukan angka, pecahan, ≤ 0,
+  bagian yang sama besar atau lebih besar dari induk, dan **total yang tidak tepat sama** dengan
+  estimasi induk. Pesannya menyebut arah selisihnya: "Total 7 jam, kurang 1 jam dari estimasi induk
+  8 jam." atau "lebih 1 jam".
+- **Tidak ada pembagian otomatis dan tidak ada estimasi karangan.** Judul memakai
+  `"<judul induk> (bagian N)"`, deskripsi memakai **deskripsi induk sendiri**, dan skill memakai
+  skill induk. Ketiganya berasal dari data pengguna, bukan dari model.
+- Setelah N tugas dibuat, `fetchInitialData(resolvedCode)` dipanggil ulang sehingga **skor dihitung
+  ulang** untuk setiap subtugas.
+
+### 4. Berkas yang Diubah (ticket ini)
+
+| Berkas | Tindakan |
+|---|---|
+| `app/p/[code]/result/result-client.tsx` | Diubah: banner R2 berangka, status "Tidak layak dialokasikan", pemisahan skor/kelayakan, ringkasan batas beban, alasan per anggota, panel Pecah tugas |
+| `lib/scoring/interaction.ts` | Diubah: tambah `describeOverCap`, `SplitPart`, `SplitValidation`, `validateSplit` |
+| `test/scoring/r2_split.test.ts` | Baru: 26 tes |
+| `docs/STATUS.md` | Diubah: bagian ini (append-only) |
+
+**2 berkas implementasi** (batas 5). Tidak ada dependensi baru. Tidak ada perubahan bobot K/S/C/M.
+Tidak ada perubahan R2. Tidak ada perubahan data evaluasi.
+
+### 5. Bukti R2 Masih Berjalan (output aktual)
+
+```text
+BUKTI 1: R2 masih menolak tugas 8 jam / batas 5 jam
+  ideal = 4 | cap = 5
+  owner = "" (kosong = tidak dipaksakan)
+  budi eligible = false | heri eligible = false
+  skor budi = 74.0% | skor heri = 80.2% -> skor tinggi TIDAK dijadikan owner
+
+PESAN R2:
+  Usaha tugas 8 jam. Beban ideal 4.00 jam. Batas R2 5.00 jam (1,25 × beban ideal). Selisih 3.00 jam melebihi batas.
+
+BUKTI 2: dua subtugas 4 jam dievaluasi terpisah
+  s1: owner=heri skor budi=78.0% heri=84.2%
+  s2: owner=budi skor budi=83.3% heri=69.5%
+  warning r2_no_candidate tersisa? false
+```
+
+Bukti 2 juga menunjukkan **skor dihitung ulang per subtugas**: s1 memilih Heri, s2 memilih Budi,
+karena kosinus tiap subtugas berbeda. Bila skor induk dipakai bersama, keduanya akan memilih anggota
+yang sama.
+
+### 6. Hasil Tes (output aktual)
+
+```text
+npx vitest run test/scoring test/api test/ui test/validation
+ Test Files  21 passed (21)
+      Tests  312 passed (312)
+```
+
+Sebelumnya 286 tes; **+26 tes baru** di `test/scoring/r2_split.test.ts`:
+
+| Validasi yang diminta | Tes |
+|---|---|
+| Tugas 8 jam batas 5 jam tidak dialokasikan | "leaves the 8 hour task without a penanggung jawab", "records the facts the message needs" |
+| Skor tinggi tidak otomatis jadi owner | "never promotes the higher scorer to owner as a compromise" |
+| Dua subtugas 4 jam dievaluasi terpisah | "assigns both subtasks, each within the cap", "gives each subtask its own score" |
+| Skor dihitung ulang per subtugas | "rescoring follows the cosine input, so the subtasks are independent" |
+| R1 | "R1: a member with no remaining hours is not a candidate" |
+| R2 | "R2: a subtask still above the cap stays unassigned" |
+| R3 | "R3: a member without the required skill at level 3 is named R3, not R1", "R3: no member at level 3 still leaves the task unowned" |
+| R4 | "R4: a task larger than the whole roster stays unassigned" |
+| R5 | "R5: a locked task keeps its owner even when another member scores higher" |
+| Total pecahan tugas | 8 tes `validateSplit` (cocok, kurang, lebih, satu bagian utuh, kosong, pecahan, nol/negatif, tidak rata tapi total cocok) |
+| Ekspor sesuai hasil aktual | "the 8 hour task exports with an empty owner" |
+
+Typecheck, lint, build:
+
+| Perintah | Hasil |
+|---|---|
+| `npx tsc --noEmit` | 0 error |
+| `npx eslint` (berkas terkait) | 0 error (2 warning `AssignmentWarning`/`CandidateScore` di `interaction.ts` sudah ada sebelum ticket ini) |
+| `npx next build` | berhasil, 12 rute |
+
+### 7. Keterbatasan
+
+- **Tidak ada hierarki tugas.** Subtugas adalah tugas biasa yang berdiri sendiri. Setelah dipecah,
+  **tugas induk masih ada dan masih dihitung** sebesar estimasi penuhnya. Pengguna harus menghapus
+  atau menyesuaikan tugas induk sendiri; sistem tidak melakukannya otomatis karena itu akan
+  mengubah data pengguna tanpa persetujuan. Pesan sukses menyebutkan hal ini.
+- **Judul, deskripsi, dan skill subtugas disalin dari induk**, bukan diisi per bagian. Pengguna
+  menyuntingnya di halaman tugas bila satu bagian perlu deskripsi berbeda. Ini konsekuensi dari
+  "jangan mengarang" dan tidak adanya kolom hierarki untuk menyimpan metadata bagian.
+- **Verifikasi visual di browser belum dilakukan** (tidak ada sesi browser di lingkungan ini).
+  Yang diverifikasi: keluaran engine, keluaran `describeOverCap`/`validateSplit`, markup dan atribut
+  aksesibilitas dari kode, tsc, eslint, build.
+- **Beban ideal ikut berubah setelah pemecahan** karena total jam dan jumlah tugas berubah. Ini
+  perilaku mesin yang sudah ada, bukan efek samping perbaikan ini.
+
+### Putusan
+
+**SELESAI.** Skor dan kelayakan kini ditampilkan terpisah dengan label eksplisit bahwa skor bukan
+jaminan penugasan. Pesan R2 memuat usaha tugas, beban ideal, batas, dan selisih jam dengan kalimat
+yang diminta. Tugas 8 jam dengan batas 5 jam tetap tidak memperoleh penanggung jawab, dan anggota
+dengan skor tertinggi tidak dipromosikan. Alur "Pecah tugas" memakai POST tugas yang sudah ada,
+memvalidasi total terhadap estimasi induk, dan menghitung ulang skor tiap subtugas. 312 tes lulus,
+typecheck dan lint bersih, build berhasil.
