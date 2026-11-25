@@ -4033,3 +4033,103 @@ yang diminta. Tugas 8 jam dengan batas 5 jam tetap tidak memperoleh penanggung j
 dengan skor tertinggi tidak dipromosikan. Alur "Pecah tugas" memakai POST tugas yang sudah ada,
 memvalidasi total terhadap estimasi induk, dan menghitung ulang skor tiap subtugas. 312 tes lulus,
 typecheck dan lint bersih, build berhasil.
+
+---
+
+## T-UI-MATRIX-01 — Dashboard rekomendasi menggantikan matriks sebagai tampilan utama
+
+**Tanggal:** sesi berjalan · **Branch:** `redesign/fuelplate-ui` (belum di-commit) · **Status: SELESAI**
+
+### 1. Masalah yang dilaporkan dan pemetaannya ke perbaikan
+
+| # | Masalah | Perbaikan |
+|---|---|---|
+| 1 | Terlalu banyak informasi teknis sekaligus | Halaman dibuka dengan `Ringkasan hasil` (6 angka) lalu kartu per tugas. Tabel penuh pindah ke tab `Matriks lengkap`. |
+| 2 | Angka K, S, C, M sulit dipahami | Rincian pindah ke disclosure `Rincian perhitungan K, S, C, M` di dalam tiap kartu, tertutup secara bawaan, dengan penjelasan satu baris per komponen, bobot, kontribusi (`raw × bobot = poin`), dan rumus. |
+| 3 | Grafik terlalu kecil | Kartu memakai lebar penuh kolom. Batang beban diskalakan terhadap batas R2, sehingga ujung batang berarti "batas", bukan maksimum sembarang. |
+| 4 | Status GUGUR R2/R3 membingungkan | Peringatan dipisah per aturan (R1, R2, R3, R4, R5) dengan format tetap: apa masalahnya, angka penyebab, dampak, tindakan. |
+| 5 | Skor tertinggi tampak seperti rekomendasi valid | Blok `Penanggung jawab` hanya terisi bila `primaryMemberId !== ''`. Skor selalu berlabel `skor NN%` dan berdiri di kolom terpisah dari `Alternatif`/kelayakan. Kalimat tetap: skor hanya perbandingan, kelayakan yang menentukan. |
+| 6 | Sulit mengetahui siapa yang menerima tugas | Nama pemilik ada di kartu tugas, di kolom matriks, dan di ekspor, semuanya dari `primaryMemberId` yang sama. |
+| 7 | Beban anggota dan total penugasan kurang menonjol | `Ringkasan hasil` memuat total beban dan batas R2; daftar `Beban anggota` muncul di panel ringkasan dan di sidebar dengan beban, kapasitas, batas R2, dan status dalam/melewati batas. |
+| 8 | Pembeda skor vs kelayakan | Dua label terpisah, dua tempat berbeda. Tidak ada satu komponen pun yang menyimpulkan kelayakan dari skor. |
+| 9 | Responsivitas | Bawaan ponsel adalah `ringkasan` (kartu bertumpuk). Tabel `min-w-[760px]` hanya dirender di balik tab `matriks` yang dipilih eksplisit. Grid 1 → 2 → 3 kolom, target sentuh 44px di layar kecil. |
+
+### 2. Berkas yang berubah
+
+| Berkas | Jenis | Isi |
+|---|---|---|
+| `components/recommendations/result-dashboard.tsx` | baru | `summarise()`, `ResultSummary`, `ScoreDetail`, `ContributionRow`, `MemberLoadRow`, `TaskRecommendationCard`, `Stat`; tipe `DashboardSummary`, `TaskCardData`. |
+| `app/p/[code]/result/result-client.tsx` | diubah | State `view` (`'ringkasan' \| 'matriks'`, bawaan `'ringkasan'`), turunan `summary`/`taskCards`/`capHours` dari `currentResult`, blok ringkasan, tablist `view-tab-ringkasan`/`view-tab-matriks`, panel ringkasan per tugas, panel matriks, pesan R1–R5 ditulis ulang, sidebar memakai `MemberLoadRow`. `describeR2`, `LoadMeter`, `WorkloadSummary` dihapus karena tidak terpakai lagi. |
+| `test/ui/result-dashboard.test.ts` | baru | 14 tes. |
+| `docs/STATUS.md` | diubah | Bagian ini. |
+
+Tidak ada perubahan DB, API, mesin skor, bobot, atau aturan R1–R5.
+
+### 3. Bukti konsistensi data
+
+Satu `currentResult` (satu hasil `globalAssign`) dipakai oleh ringkasan, kartu, matriks, sidebar, dan
+ekspor. Dijalankan pada skenario nyata 2 anggota / 3 tugas (satu tugas 8 jam):
+
+```
+idealLoad=8  capHours=10.00
+RINGKASAN : tugas=3 anggota=2 dialokasikan=3 perluPerhatian=0
+            totalBeban=16 jam  kapasitas=40 jam
+KARTU     : Bab 1 (4j): owner=Budi | alternatif=tidak ada
+            Bab 2 (4j): owner=Budi | alternatif=tidak ada
+            Tugas 8 jam (8j): owner=Heri | alternatif=Budi
+MATRIKS   : big=heri  a=budi  b=budi
+EKSPOR    : big: owner="Heri"  a: owner="Budi"  b: owner="Budi"
+BEBAN     : Budi 8/20 (dalam batas) · Heri 8/20 (dalam batas)
+```
+
+Skenario tidak layak (satu tugas 8 jam, batas 5 jam):
+
+```
+KARTU  : owner = TIDAK LAYAK DIALOKASIKAN
+MATRIKS: primaryMemberId = ""
+EKSPOR : owner = ""
+BANNER : Usaha tugas 8 jam. Beban ideal 4.00 jam. Batas R2 5.00 jam (1,25 × beban ideal).
+         Selisih 3.00 jam melebihi batas.
+SKOR   : budi=74.0% heri=80.2%  (dibandingkan, bukan dijadikan owner)
+```
+
+Keempat lapisan menyatakan hal yang sama. Anggota berskor tertinggi tidak pernah tampil sebagai
+penanggung jawab. Alternatif hanya ditampilkan bila mesin menominasikannya **dan** anggota itu
+`isEligible`; fallback R3 tidak dipromosikan menjadi alternatif valid.
+
+### 4. Hasil tes (keluaran aktual)
+
+| Perintah | Hasil |
+|---|---|
+| `npx vitest run test/scoring test/api test/ui test/validation` | **22 berkas, 326 tes lulus** (sebelumnya 312) |
+| `npx vitest run test/ui/result-dashboard.test.ts` | 14 lulus |
+| `npx vitest run test/integration` | 8 lulus |
+| `npx tsc --noEmit` | 0 error |
+| `npx eslint` (3 berkas terkait) | 0 error, 0 warning |
+| `npx next build` | berhasil, 12 rute |
+
+### 5. Interaksi lama
+
+Slider bobot, what-if, terima, tukar, kunci, pindahkan, undo, dan ekspor tetap berfungsi. Kartu tugas
+memanggil handler yang sama (`applyOwnerChange`, `toggleLock`, `setDetailTaskId`, `setSplitParentId`),
+bukan jalur kedua. Penghitungan ulang tetap `globalAssign` murni dengan `cosineMap` yang sudah
+dibangun; tidak ada panggilan AI atau jaringan untuk tampilan.
+
+### 6. Keterbatasan
+
+- **Verifikasi visual di browser belum dilakukan** (tidak ada sesi browser). Yang diverifikasi:
+  keluaran engine, markup statis komponen, kelas responsif, tsc, eslint, build.
+- **Beban setelah simulasi di kartu anggota** menampilkan beban hasil `currentResult`. Simulasi
+  what-if yang belum diterapkan tidak mengubah angka di panel `Beban anggota` sampai diterapkan; ini
+  disengaja agar panel tidak menampilkan angka yang belum berlaku.
+- **`result-client.tsx` masih memuat 11 em dash lama.** Tidak ada yang ditambahkan oleh ticket ini;
+  berkas baru `result-dashboard.tsx` tidak memuat em dash dan tidak memuat emoji.
+- Tiga kegagalan `npm test` penuh berasal dari tes live API (`test/ai/*.live.test.ts`) karena tidak ada
+  kredensial; sudah ada sebelum ticket ini.
+
+### Putusan
+
+**SELESAI.** Pengguna dapat mengetahui siapa menerima tugas apa tanpa membaca rumus. Penanggung
+jawab hanya muncul bila penugasan valid. Skor dan kelayakan dipisah dengan label dan tempat berbeda.
+Rincian K/S/C/M tetap dapat diakses. Peringatan R1–R5 menjelaskan masalah, angka, dampak, dan
+tindakan. Matriks, grafik, dan ringkasan membaca satu hasil perhitungan yang sama. 326 tes lulus.

@@ -17,7 +17,6 @@ import {
   toCsv,
   toPlainText,
   compareSnapshots,
-  describeR2,
   describeOverCap,
   validateSplit,
   smallestSplitThatFits,
@@ -30,9 +29,16 @@ import {
   type UndoEntry,
 } from '@/lib/scoring/interaction';
 import { recordEvent } from '@/lib/client/events';
-import { LoadMeter } from '@/components/motion/score-bar';
 import { RevealGroup, RevealItem } from '@/components/motion/reveal';
 import { ScoreBreakdown } from '@/components/recommendations/score-breakdown';
+import {
+  ResultSummary,
+  ScoreDetail,
+  MemberLoadRow,
+  TaskRecommendationCard,
+  summarise,
+  type TaskCardData,
+} from '@/components/recommendations/result-dashboard';
 import {
   CandidateScoreChart,
   candidateStatus,
@@ -102,6 +108,15 @@ export function ResultClient({ params }: { params: Promise<{ code: string }> }) 
   const [moveTarget, setMoveTarget] = useState<{ taskId: string; memberId: string } | null>(null);
   const [swapAnchor, setSwapAnchor] = useState<string | null>(null);
   const [showComparison, setShowComparison] = useState(false);
+  /**
+   * T-UI-MATRIX-01: two views over the SAME `currentResult`.
+   *
+   * "ringkasan" is the default because it answers the question a student
+   * arrives with (who gets what). "matriks" keeps the full comparison table for
+   * anyone who wants to check every member at once. Both read the identical
+   * engine result, so switching cannot change a single number.
+   */
+  const [view, setView] = useState<'ringkasan' | 'matriks'>('ringkasan');
 
   /**
    * T-FIX-R2-02 point 3: the split flow.
@@ -856,18 +871,44 @@ export function ResultClient({ params }: { params: Promise<{ code: string }> }) 
    * roster's own capacity and skill levels. Nothing here re-derives R1/R2/R3,
    * so the banner can never disagree with the scores below it.
    */
-  const assignmentStatus: { key: string; tone: 'danger' | 'warn' | 'info'; headline: string; detail: string }[] =
-    (() => {
-      const items: { key: string; tone: 'danger' | 'warn' | 'info'; headline: string; detail: string }[] = [];
+  /**
+   * T-UI-MATRIX-01 point 7: every rule warning answers the same four questions,
+   * in the same order, so a student can act on it without knowing the rule
+   * numbers. Only rules that actually fired appear; a rule that held is not
+   * mentioned, because "R1 OK" everywhere is noise.
+   */
+  type RuleNotice = {
+    key: string;
+    tone: 'danger' | 'warn' | 'info';
+    headline: string;
+    detail: string;
+  };
+  const assignmentStatus: RuleNotice[] = (() => {
+    const items: RuleNotice[] = [];
 
       const allR1Excluded = members.length > 0 && members.every((m) => !checkR1(m));
       if (allR1Excluded) {
         items.push({
           key: 'r1-all',
           tone: 'danger',
-          headline: 'Tidak ada anggota dengan jam tersedia',
+          headline: 'R1: tidak ada anggota yang tersedia',
           detail:
-            'R1 mengeluarkan setiap anggota yang jam tersedianya 0, sehingga belum ada yang bisa ditugaskan. Isi jam tersedia pada profil anggota.',
+            `Seluruh ${members.length} anggota memiliki jam tersedia 0, sehingga tidak satu pun lolos R1. ` +
+            `Akibatnya semua tugas tetap tanpa penanggung jawab. ` +
+            `Isi jam tersedia pada halaman Anggota, lalu hitung ulang.`,
+        });
+      }
+
+      const r1Excluded = members.filter((m) => !checkR1(m));
+      if (r1Excluded.length > 0 && !allR1Excluded) {
+        items.push({
+          key: 'r1-some',
+          tone: 'warn',
+          headline: `R1: ${r1Excluded.length} anggota tidak dapat menerima tugas`,
+          detail:
+            `${r1Excluded.map((m) => m.name).join(', ')} memiliki jam tersedia 0. ` +
+            `Mereka tidak dihitung sebagai kandidat, sehingga tugas dibagi ke anggota yang tersisa. ` +
+            `Bila ada tugas yang akhirnya tidak terbagi, naikkan jam tersedia anggota ini.`,
         });
       }
 
@@ -919,10 +960,12 @@ export function ResultClient({ params }: { params: Promise<{ code: string }> }) 
         items.push({
           key: 'r2-blocked',
           tone: 'warn',
-          headline: 'Sebagian tugas belum mendapat penanggung jawab karena batas R2',
+          headline: `R2: ${blocked.length} tugas belum mendapat penanggung jawab`,
           detail:
-            `${blocked.length} tugas tidak memperoleh kandidat: setiap anggota yang memenuhi R1 dan R3 ` +
-            `akan melampaui 1,25 × beban ideal bila menerimanya. Tugas dibiarkan kosong dan tidak dipaksakan.`,
+            `Tugas ini muat di bawah batas R2 (${currentResult.idealLoad * WORKLOAD_CAP_MULTIPLIER > 0 ? (currentResult.idealLoad * WORKLOAD_CAP_MULTIPLIER).toFixed(2) : '0'} jam), ` +
+            `tetapi setiap anggota yang lolos R1 dan R3 sudah membawa beban lain sehingga akan melewati batas itu bila menerimanya. ` +
+            `Akibatnya tugas dibiarkan kosong, bukan dipaksakan ke anggota yang melanggar. ` +
+            `Kurangi beban anggota lain, atau pecah tugas ini menjadi bagian yang lebih kecil.`,
         });
       }
 
@@ -931,11 +974,12 @@ export function ResultClient({ params }: { params: Promise<{ code: string }> }) 
         items.push({
           key: 'r3-fallback',
           tone: 'warn',
-          headline: 'R3 tidak menemukan kandidat level 3',
+          headline: `R3: ${r3Warnings.length} tugas tidak punya anggota dengan skill level 3`,
           detail:
-            `${r3Warnings.length} tugas tidak memiliki anggota dengan skill wajib pada level 3 atau lebih. ` +
-            `Sesuai PRD, sistem tetap menampilkan saran terbaik, tetapi anggota tersebut BUKAN kandidat ` +
-            `yang memenuhi R3.`,
+            `Belum ada anggota yang menguasai skill wajib tugas ini pada level 3 atau lebih. ` +
+            `Sesuai PRD, sistem tetap menampilkan saran terbaik yang tersedia, tetapi anggota itu belum memenuhi R3, ` +
+            `jadi jangan dianggap penugasan final. ` +
+            `Naikkan level skill anggota yang relevan pada halaman Anggota, atau periksa kembali skill wajib tugas ini.`,
         });
       }
 
@@ -944,10 +988,11 @@ export function ResultClient({ params }: { params: Promise<{ code: string }> }) 
         items.push({
           key: 'r5-overload',
           tone: 'warn',
-          headline: 'Tugas terkunci menyebabkan beban berlebih',
+          headline: `R5: ${lockedOverload.length} tugas terkunci membuat beban berlebih`,
           detail:
-            `${lockedOverload.length} tugas terkunci mempertahankan pemiliknya meskipun melampaui batas R2. ` +
-            `R5 dipertahankan dan tugas tidak dipindahkan.`,
+            `Tugas yang Anda kunci tetap dipegang pemiliknya meskipun bebannya melewati batas R2. ` +
+            `R5 dipertahankan, jadi tugas tidak dipindahkan otomatis dan beban anggota itu melampaui batas. ` +
+            `Buka kunci tugas tersebut bila ingin sistem mencarikan pemilik lain.`,
         });
       }
 
@@ -957,15 +1002,19 @@ export function ResultClient({ params }: { params: Promise<{ code: string }> }) 
           items.push({
             key: 'unassigned',
             tone: 'warn',
-            headline: 'Ada tugas tanpa penanggung jawab',
-            detail: `${unassigned} tugas belum memiliki penanggung jawab yang memenuhi aturan. Lihat alasan pada baris tugas.`,
+            headline: `${unassigned} tugas belum punya penanggung jawab`,
+            detail:
+              'Setiap tugas hanya boleh punya satu penanggung jawab (R4), jadi tugas ini dibiarkan kosong ' +
+              'daripada dibagi diam-diam ke beberapa orang. Lihat alasan pada kartu tugas atau baris matriks.',
           });
         } else {
           items.push({
             key: 'ok',
             tone: 'info',
-            headline: 'Semua tugas mendapat penanggung jawab yang memenuhi R1–R4',
-            detail: 'R2 dan R3 terpenuhi untuk setiap penugasan. Kolom alasan pada tiap sel menjelaskan pilihan skornya.',
+            headline: 'Semua tugas mendapat penanggung jawab yang memenuhi R1 sampai R4',
+            detail:
+              'Setiap tugas punya tepat satu penanggung jawab, dan batas R2 serta syarat R3 terpenuhi. ' +
+              'Buka rincian perhitungan bila ingin melihat asal skornya.',
           });
         }
       }
@@ -981,6 +1030,41 @@ export function ResultClient({ params }: { params: Promise<{ code: string }> }) 
   const impossibleTaskId =
     currentResult.warnings.find((w) => w.code === 'r2_no_candidate' && w.detail?.exceedsCapAlone)
       ?.taskId ?? null;
+
+  /*
+   * T-UI-MATRIX-01: everything the dashboard shows is derived here, once, from
+   * `currentResult`. The summary counts, the task cards and the matrix all read
+   * these same objects, so the three views cannot disagree.
+   */
+  const summary = summarise(currentResult, members, tasks);
+
+  const taskCards: TaskCardData[] = rows.map(({ task, assignment }) => {
+    const owner = assignment.primaryMemberId ? memberById.get(assignment.primaryMemberId) : undefined;
+    const ownerScore = assignment.primaryMemberId
+      ? (assignment.scores[assignment.primaryMemberId]?.breakdown.total ?? null)
+      : null;
+
+    /*
+     * An alternative only counts when the engine nominated one AND that member
+     * is actually eligible. R3 fallback can nominate a member who does not meet
+     * the rule; calling that a valid alternative would be the fake
+     * recommendation the rules forbid.
+     */
+    const altId = assignment.alternativeMemberId;
+    const altScore = altId ? assignment.scores[altId] : undefined;
+    const altIsValid = Boolean(altId && altScore?.isEligible);
+
+    return {
+      task,
+      ownerName: owner?.name ?? null,
+      ownerScore,
+      alternativeName: altIsValid ? (memberById.get(altId!)?.name ?? null) : null,
+      alternativeScore: altIsValid ? (altScore?.breakdown.total ?? null) : null,
+      warnings: currentResult.warnings.filter((w) => w.taskId === task.id),
+    };
+  });
+
+  const capHours = currentResult.idealLoad * WORKLOAD_CAP_MULTIPLIER;
 
   const changedNow = new Set(rowChanges.map((c) => c.taskId));
   const previewAssignment = preview ? resultFor(preview.taskId, displayed) : null;
@@ -1160,30 +1244,14 @@ export function ResultClient({ params }: { params: Promise<{ code: string }> }) 
             <RevealGroup as="ul" className="space-y-3 pt-3">
               {members.map((member) => {
                 const load = currentResult.memberLoads[member.id] ?? 0;
-                const r2Limit = currentResult.idealLoad * WORKLOAD_CAP_MULTIPLIER;
-                const ratio = member.capacity > 0 ? load / member.capacity : 0;
-                const overR2 = load > r2Limit;
-                const overCapacity = load > member.capacity;
                 return (
                   <RevealItem as="li" key={member.id} className="space-y-1">
-                    <div className="flex items-baseline justify-between gap-2">
-                      <span className="truncate text-[12px] font-semibold text-ink">{member.name}</span>
-                      <span className="shrink-0 font-mono text-[10.5px] tabular-nums text-muted" data-numeric>
-                        {load} / {member.capacity} jam
-                      </span>
-                    </div>
-                    <LoadMeter ratio={ratio} isOver={overCapacity || overR2} isR2Over={overR2} />
-                    <p
-                      className={`text-[10px] leading-snug ${overR2 || overCapacity ? 'font-semibold text-danger' : 'text-muted'}`}
-                    >
-                      {overR2 || overCapacity ? '⚠ ' : ''}
-                      {describeR2(load, currentResult.idealLoad, member.capacity)}
-                    </p>
-                    {load > r2Limit && (
-                      <p className="text-[10px] leading-snug text-danger">
-                        Beban setelah menerima tugas melebihi {WORKLOAD_CAP_MULTIPLIER}× ideal ({r2Limit.toFixed(2)} jam).
-                      </p>
-                    )}
+                    <MemberLoadRow
+                      name={member.name}
+                      load={load}
+                      capacity={member.capacity}
+                      capHours={capHours}
+                    />
                   </RevealItem>
                 );
               })}
@@ -1225,17 +1293,19 @@ export function ResultClient({ params }: { params: Promise<{ code: string }> }) 
           </section>
         </aside>
 
-        {/* Matrix */}
-        <section className="min-w-0 flex-1" aria-label="Matriks rekomendasi">
+        {/* T-UI-MATRIX-01: the dashboard. The heading names the job of the
+            screen rather than the artifact, because a student arrives asking
+            "who gets what", not "show me a matrix". */}
+        <section className="min-w-0 flex-1" aria-label="Hasil rekomendasi">
           <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
             <div className="space-y-1.5">
               <Eyebrow>FR-08 · FR-09 · FR-11 · FR-18</Eyebrow>
               <h1 className="display text-[clamp(1.5rem,2.4vw,1.9rem)] text-ink">
-                Matriks <span className="accent-word">penugasan</span>
+                Hasil <span className="accent-word">pembagian tugas</span>
               </h1>
               <p className="max-w-[70ch] text-[12px] leading-relaxed text-muted">
-                Setiap tugas punya satu penanggung jawab dan satu alternatif. Pilih sel untuk menerima,
-                tekan L untuk mengunci, atau geser bobot untuk menghitung ulang di browser.
+                Siapa menerima tugas apa, dan mengapa. Skor kecocokan hanya perbandingan antar
+                anggota; yang menentukan penanggung jawab adalah status kelayakan.
               </p>
               {/*
                 T-FIX-R2-02. The matrix used to be the only place a reader could
@@ -1273,19 +1343,6 @@ export function ResultClient({ params }: { params: Promise<{ code: string }> }) 
                 lain. Yang menentukan penanggung jawab adalah{' '}
                 <span className="font-medium text-ink">status kelayakan</span> pada tiap baris.
               </p>
-              {/*
-                Workload summary (T-5.04). The window's `play` move is the one
-                motion beat on this page, and it is a single one-shot reveal of
-                already-computed numbers, not a repeating animation: the reader
-                sees the spread of work settle once and then it stays still. The
-                figures are in the DOM from first paint, nothing is masked, and
-                the sliders and matrix are untouched by it.
-              */}
-              <WorkloadSummary
-                loads={members.map((member) => currentResult.memberLoads[member.id] ?? 0)}
-                ideal={currentResult.idealLoad}
-                reduced={reduced}
-              />
             </div>
             <div className="flex flex-wrap items-center gap-1.5">
               <Chip tone="muted">
@@ -1310,6 +1367,12 @@ export function ResultClient({ params }: { params: Promise<{ code: string }> }) 
               )}
             </div>
           </div>
+
+          {/* T-UI-MATRIX-01 point 1: the four counts and the two load figures a
+              student needs before reading any detail. Every value comes from
+              `summarise(currentResult)`, the same result the cards and the matrix
+              render, so the three cannot disagree. */}
+          <ResultSummary summary={summary} />
 
           {/* FR-08: the requirement list is only useful with its verdict. This
               banner states, from engine output alone, which of the PRD v0.3
@@ -1360,6 +1423,127 @@ export function ResultClient({ params }: { params: Promise<{ code: string }> }) 
             </ul>
           )}
 
+          {/* T-UI-MATRIX-01 point 6: one switch between the two views. Both read
+              `currentResult`, so this is a change of presentation only. Labels
+              name what each view is for, and the counts keep the reader oriented
+              while the body below swaps. */}
+          <div
+            className="mb-2 mt-2 flex flex-wrap items-center gap-1.5"
+            role="tablist"
+            aria-label="Pilih tampilan hasil"
+          >
+            {(
+              [
+                { key: 'ringkasan' as const, label: 'Ringkasan per tugas', hint: `${rows.length} kartu` },
+                { key: 'matriks' as const, label: 'Matriks lengkap', hint: 'semua anggota' },
+              ]
+            ).map((tab) => {
+              const active = view === tab.key;
+              return (
+                <button
+                  key={tab.key}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  aria-controls={`view-${tab.key}`}
+                  id={`tab-${tab.key}`}
+                  data-testid={`view-tab-${tab.key}`}
+                  onClick={() => setView(tab.key)}
+                  className={`inline-flex min-h-[32px] items-center gap-1.5 rounded-full px-3 text-[11.5px] font-medium transition-colors duration-200 max-sm:min-h-[44px] ${
+                    active
+                      ? 'bg-ink text-paper'
+                      : 'bg-card text-ink shadow-[inset_0_0_0_1px_var(--line-strong)] hover:shadow-[inset_0_0_0_1px_var(--ink)]'
+                  }`}
+                >
+                  {tab.label}
+                  <span className={`font-mono text-[10px] tabular-nums ${active ? 'text-paper/70' : 'text-muted'}`} data-numeric>
+                    {tab.hint}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* ---- View: ringkasan per tugas (default) ---- */}
+          {view === 'ringkasan' && (
+            <div id="view-ringkasan" role="tabpanel" aria-labelledby="tab-ringkasan" className="space-y-2.5">
+              {/* Point 8: every member's load, against the R2 cap, on this view. */}
+              <section className="glass-solid rounded-[var(--radius-card)] p-4" data-testid="member-load-summary">
+                <header className="flex flex-wrap items-baseline justify-between gap-2 border-b border-line pb-2">
+                  <h2 className="heading text-[13px] text-ink">Beban anggota</h2>
+                  <span className="font-mono text-[10.5px] tabular-nums text-muted" data-numeric>
+                    batas R2 {capHours.toFixed(2)} jam
+                  </span>
+                </header>
+                <ul className="grid gap-x-5 gap-y-3 pt-2.5 sm:grid-cols-2">
+                  {members.map((member) => (
+                    <li key={member.id}>
+                      <MemberLoadRow
+                        name={member.name}
+                        load={currentResult.memberLoads[member.id] ?? 0}
+                        capacity={member.capacity}
+                        capHours={capHours}
+                      />
+                    </li>
+                  ))}
+                </ul>
+              </section>
+
+              {/* Points 2 and 7: one card per task, owner named only when the
+                  engine assigned one, with the rule and its numbers when not. */}
+              {taskCards.map((card) => {
+                const assignment = byTaskId.get(card.task.id);
+                const ownerId = assignment?.primaryMemberId ?? '';
+                const ownerBreakdown = ownerId ? assignment?.scores[ownerId]?.breakdown : undefined;
+                return (
+                  <TaskRecommendationCard
+                    key={card.task.id}
+                    data={card}
+                    capHours={capHours}
+                    idealLoad={currentResult.idealLoad}
+                    onAccept={
+                      ownerId
+                        ? () =>
+                            applyOwnerChange(card.task.id, ownerId, {
+                              lock: false,
+                              label: 'Terima rekomendasi',
+                              event: 'recommendation_accepted',
+                            })
+                        : undefined
+                    }
+                    onSplit={() => {
+                      setSplitParentId(card.task.id);
+                      setSplitRows([{ hours: '' }, { hours: '' }]);
+                      setSplitError(null);
+                      setDetailTaskId(card.task.id);
+                    }}
+                    onLock={
+                      assignment
+                        ? () => {
+                            toggleLock(card.task.id);
+                          }
+                        : undefined
+                    }
+                    onMove={() => setDetailTaskId(card.task.id)}
+                  >
+                    {/* The K/S/C/M arithmetic, folded away until asked for. */}
+                    {ownerBreakdown && (
+                      <ScoreDetail
+                        breakdown={ownerBreakdown}
+                        weights={weights}
+                        isFallback={isFallback}
+                        memberName={memberById.get(ownerId)?.name ?? ''}
+                      />
+                    )}
+                  </TaskRecommendationCard>
+                );
+              })}
+            </div>
+          )}
+
+          {/* ---- View: matriks lengkap ---- */}
+          {view === 'matriks' && (
+            <div id="view-matriks" role="tabpanel" aria-labelledby="tab-matriks">
           {/* FR-18: preview bar. It sits above the table, so it never covers a cell. */}
           <AnimatePresence>
             {preview && previewAssignment && previewTask && previewMember && (
@@ -2091,6 +2275,8 @@ export function ResultClient({ params }: { params: Promise<{ code: string }> }) 
               </section>
             );
           })()}
+            </div>
+          )}
 
           {/* FR-14 export + FR-17 comparison */}
           <div className="mt-3 space-y-2 rounded-[var(--radius-card)] bg-card px-4 py-3 shadow-[inset_0_0_0_1px_var(--line)]">
@@ -2202,66 +2388,3 @@ export function ResultClient({ params }: { params: Promise<{ code: string }> }) 
 
 const DEFAULT_HYBRID_WEIGHTS_LOCAL = { ...DEFAULT_WEIGHTS };
 
-/**
- * Workload spread: one tick per member, on the same axis as the R2 ceiling.
- *
- * Reading the panel on the left tells you each member's hours, but not how the
- * group compares at a glance. These ticks are positioned on the actual ratio
- * (load / ideal) so a reader can see at once whether the work is spread evenly
- * or concentrated. It is a static scale after its entrance: no scroll link, no
- * loop, and the underlying numbers are printed beside it as real text.
- */
-function WorkloadSummary({
-  loads,
-  ideal,
-  reduced,
-}: {
-  loads: number[];
-  ideal: number;
-  reduced: boolean;
-}) {
-  if (loads.length === 0 || !Number.isFinite(ideal) || ideal <= 0) return null;
-  // The axis ends at the R2 ceiling, which is the only threshold the product
-  // applies, so every tick has a meaning rather than being a decoration.
-  const ceiling = WORKLOAD_CAP_MULTIPLIER;
-  const ratioOf = (load: number) => Math.max(0, Math.min(1, load / ideal / ceiling));
-
-  return (
-    <div className="mt-2.5 space-y-1.5">
-      <div className="flex items-baseline justify-between gap-2">
-        <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-fog">Sebaran beban</span>
-        <span className="font-mono text-[10px] tabular-nums text-fog" data-numeric>
-          batas R2 = {ceiling}× ideal
-        </span>
-      </div>
-      <div
-        aria-hidden="true"
-        className="relative h-3.5 w-full overflow-hidden rounded-[3px] bg-mist shadow-[inset_0_0_0_1px_var(--line)]"
-      >
-        {/* The ceiling hairline, so the reader can see what "over" means. */}
-        <span className="absolute inset-y-0 right-0 w-px bg-line-strong" />
-        {loads.map((load, index) => {
-          const ratio = ratioOf(load);
-          const over = load / ideal > ceiling;
-          return (
-            <motion.span
-              key={index}
-              className="absolute top-0.5 bottom-0.5 w-[2px] rounded-full"
-              style={{
-                left: `calc(${ratio * 100}% - 1px)`,
-                backgroundColor: over ? 'var(--danger)' : 'var(--accent-strong)',
-              }}
-              initial={reduced ? false : { scaleY: 0, opacity: 0 }}
-              animate={{ scaleY: 1, opacity: 1 }}
-              transition={{
-                duration: DURATION.data,
-                ease: EASE.out,
-                delay: index * 0.05,
-              }}
-            />
-          );
-        })}
-      </div>
-    </div>
-  );
-}
