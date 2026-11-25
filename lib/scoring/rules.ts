@@ -22,7 +22,14 @@ export function checkR1(member: Member): boolean {
  * all resolve names through this function.
  */
 export function normalizeSkillName(raw: string): string {
-  return raw.trim().toLowerCase().replace(/[\s_-]+/g, ' ');
+  /*
+   * The final `.trim()` is load-bearing. Collapsing separators can create a new
+   * trailing space that the leading `trim()` never saw: "koordinasi_" became
+   * "koordinasi " and therefore stopped matching "koordinasi". Trimming after
+   * the collapse means a trailing underscore, hyphen or run of spaces cannot
+   * make one skill look like two.
+   */
+  return raw.trim().toLowerCase().replace(/[\s_-]+/g, ' ').trim();
 }
 
 /**

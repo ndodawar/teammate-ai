@@ -44,6 +44,12 @@ export default function MemberProfileClient({ code, id }: { code: string; id: st
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  /*
+   * H1-02 / K-1(b): the API saves the profile and returns any skill the engine
+   * cannot resolve. Shown as a standing notice, not an error, because the save
+   * succeeded; the user needs to know the label will never match a task.
+   */
+  const [skillWarnings, setSkillWarnings] = useState<string[]>([]);
   const reduced = usePrefersReducedMotion();
 
   useEffect(() => {
@@ -105,6 +111,7 @@ export default function MemberProfileClient({ code, id }: { code: string; id: st
     e.preventDefault();
     setSubmitError(null);
     setSuccessMessage(null);
+    setSkillWarnings([]);
 
     const capacityNum = Number(capacity);
     const trimmedNote = note.trim();
@@ -162,6 +169,7 @@ export default function MemberProfileClient({ code, id }: { code: string; id: st
       }
 
       setSuccessMessage('Profil anggota berhasil diperbarui.');
+      setSkillWarnings(Array.isArray(json.warnings) ? json.warnings : []);
       setName(json.name || '');
       setNote(json.note || '');
       setCapacity(json.capacity ?? 40);
@@ -256,6 +264,23 @@ export default function MemberProfileClient({ code, id }: { code: string; id: st
                 className="rounded-[var(--radius-input)] bg-ok-surface px-3.5 py-2.5 text-[12.5px] font-medium text-ok shadow-[inset_0_0_0_1px_var(--ok)]"
               >
                 {successMessage}
+              </motion.div>
+            )}
+            {skillWarnings.length > 0 && (
+              <motion.div
+                key="warn"
+                role="status"
+                data-testid="skill-taxonomy-warning"
+                data-motion-reveal=""
+                initial={reduced ? false : { opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={reduced ? undefined : { opacity: 0 }}
+                transition={{ duration: reduced ? 0 : DURATION.feedback, ease: EASE.out }}
+                className="rounded-[var(--radius-input)] bg-warn-surface px-3.5 py-2.5 text-[12.5px] leading-relaxed text-warn shadow-[inset_0_0_0_1px_var(--warn)]"
+              >
+                {skillWarnings.map((warning) => (
+                  <p key={warning}>{warning}</p>
+                ))}
               </motion.div>
             )}
             {submitError && (

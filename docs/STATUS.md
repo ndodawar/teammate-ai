@@ -4607,3 +4607,237 @@ PRD v0.3 memakai istilah **"beban ideal"** di R2 tetapi **tidak pernah mendefini
 ### Putusan
 
 Rumus R2 sudah sesuai Opsi A dengan presisi penuh, R3 memakai normalisasi skill, penghitungan ganda induk–subtiugas tetap diperbaiki, dan kedua tampilan membaca satu perhitungan yang sama. 41 tes regresi baru mencakup 14 skenario yang diminta dan semuanya lulus dengan aritmetika manual di samping tiap asersi. Gerbang: 601 tes lulus, typecheck 0 error, lint 0 error, build 12 rute. Tiga kesalahan hitung manual saya sendiri ditemukan dan dikoreksi — mesinnya benar. Tidak ada panggilan AI live. Tidak ada commit, push, migration, atau perubahan data production.
+
+---
+
+## MASTER-MATRIX-HARDENING-01 — Fase 0
+
+Status: **Lulus**
+
+### 1. Temuan
+
+Fase 0 hanya audit, tanpa perubahan kode. Yang dipetakan:
+
+**Arsitektur aktual.**
+
+| Lapisan | Lokasi |
+|---|---|
+| Mesin skor | `lib/scoring/score.ts` (K/S/C/M, `computeScore`, `computeCapacity`) |
+| Aturan kelayakan | `lib/scoring/rules.ts` (`checkR1`–`checkR3`, `hasQualifiedMember`, normalisasi skill) |
+| Penugasan global | `lib/scoring/assign.ts` (`globalAssign`) |
+| Interaksi pengguna | `lib/scoring/interaction.ts` (`assignOwner`, `swapOwners`, `toggleLockState`, `validateChange`, `validateSplit`, `toCsv`, `toPlainText`) |
+| Pipeline AI | `lib/scoring/pipeline.ts`, `lib/ai/*` |
+| Validasi input | `lib/validation/index.ts` (Zod) |
+| API | `app/api/recommend/route.ts`, `app/api/projects/[code]/{members,tasks}/**` |
+| UI | `app/p/[code]/result/result-client.tsx`, `components/recommendations/*` |
+
+**Skrip nyata di package.json:** `dev`, `build`, `start`, `lint` (`eslint`), `test` (`vitest run`), `typecheck` (`npx tsc --noEmit`). Tidak ada skrip `test:unit` atau `test:ci`.
+
+**Baseline (sebelum pekerjaan apa pun):**
+
+| Gerbang | Hasil |
+|---|---|
+| `npm test` | **36 file lulus, 1 dilewati; 602 tes lulus, 7 dilewati** |
+| `npm run typecheck` | **0 error** |
+| `npm run lint` | **0 error, 26 warning** |
+| `npm run build` | **sukses, 12 rute** |
+
+7 tes yang dilewati adalah tes live Groq/Gemini yang bergerbang `RUN_LIVE_API_TESTS=1`. Itu perilaku yang disengaja, bukan kegagalan.
+
+**Perubahan lokal:** tidak ada. Working tree bersih pada `ccc282e`, sinkron dengan `origin/redesign/fuelplate-ui`. Tidak ada pekerjaan pengguna yang berisiko tertimpa.
+
+**Error yang sudah ada sebelum pekerjaan:** hanya 26 warning lint (impor tak terpakai di `lib/scoring/interaction.ts`, vendor JS di `.agents/skills` dan `public`, serta `test/api/member-profile.test.ts`). Tidak ada error.
+
+### 2. Perubahan
+
+Tidak ada file kode yang diubah pada fase ini. Satu-satunya penulisan adalah bagian laporan ini di `docs/STATUS.md` (append-only).
+
+### 3. Pengujian
+
+Perintah yang dijalankan, dengan keluaran apa adanya:
+
+```
+npm test            → Test Files 36 passed | 1 skipped (37)
+                      Tests      602 passed | 7 skipped (609)
+npm run typecheck   → (tanpa keluaran) EXIT=0
+npm run lint        → ✖ 26 problems (0 errors, 26 warnings)
+npm run build       → sukses, daftar 12 rute tercetak
+```
+
+### 4. Regression
+
+Tidak ada perilaku yang berubah, karena tidak ada kode yang disentuh. Baseline ini menjadi pembanding untuk seluruh fase berikutnya.
+
+### 5. Bukti
+
+Lihat keluaran terminal pada bagian 3. Jumlah 602 lulus / 7 dilewati adalah angka baseline yang harus dipertahankan atau ditingkatkan, tidak boleh turun.
+
+### 6. Gerbang
+
+Fase berikutnya **boleh dimulai**. Repository bersih, baseline diketahui, dan struktur kode sesuai asumsi di prompt.
+
+### 7. Keputusan pengguna
+
+Tiga hal ditemukan saat audit yang **belum** saya ubah dan perlu keputusan sebelum Fase 1–3 dikerjakan:
+
+1. **Validasi nama skill di profil tidak memakai taksonomi.** `memberProfileSchema` (`lib/validation/index.ts`) menerima `skill_name` string bebas, sedangkan `taskSchema` mewajibkan `required_skills` berasal dari `SKILL_TAXONOMY`. Artinya profil boleh menyimpan label apa pun, dan normalisasi T-ROOT-CAUSE-03 hanya menyamakan bentuk penulisan, bukan makna. Ini konsisten dengan keputusan sebelumnya (data disimpan seperti yang ditulis pengguna), tetapi berarti "skill tidak dikenal" tidak pernah ditolak maupun diberi peringatan di API. Perlu keputusan: biarkan (normalisasi saat baca) atau tambah peringatan.
+2. **Kapasitas 0 tidak bisa disimpan lewat API.** `memberProfileSchema` memakai `capacity: z.number().int().positive()`, sehingga anggota dengan kapasitas 0 ditolak saat menyimpan. Akibatnya jalur R1 "kapasitas 0" hanya dapat muncul dari data lama atau fixture tes, bukan dari input baru. Bila skenario S09/S19 harus dapat dibuat pengguna, ini perlu dibahas.
+3. **Tugas andalan PRD: S21–S24 belum ada sebagai tes.** `test/scoring/fixtures/scenarios.ts` memuat 20 skenario, dan `scenarios.test.ts` menjalankannya, tetapi empat kasus keputusan v0.3 (S21 semua gagal R2, S22 tidak ada yang memenuhi R3, S23 tugas terkunci overload, S24 pengecualian R4) tidak ada sebagai skenario bernomor. Perilakunya kemungkinan sudah tercakup tes lain, tetapi tidak dapat ditelusuri ke ID PRD. Ini kandidat kuat untuk Fase 3.
+
+---
+
+## MASTER-MATRIX-HARDENING-01 — Fase 1
+
+Status: **Lulus bersyarat**
+
+Lulus karena seluruh data valid diterima dan data tidak valid ditolak, dengan 29 tes baru yang membuktikannya. Bersyarat karena empat celah ditemukan dan **sengaja belum diperbaiki**: memperbaikinya berarti mengubah schema atau perilaku simpan, dan itu keputusan pengguna (lihat bagian 7).
+
+### 1. Temuan
+
+**H1-01 — Nama skill duplikat diterima dan benar-benar tersimpan.**
+`lib/validation/index.ts:52-58` (`memberProfileSchema`) tidak punya aturan keunikan. `supabase/migrations/003_member_profile_fr03.sql:11-17` membuat tabel `member_skills` tanpa `UNIQUE(member_id, skill_name)`. `supabase/migrations/005_atomic_update_member_profile.sql:105-127` melakukan DELETE lalu INSERT tanpa deduplikasi.
+Dampak: formulir dapat menyimpan "Frontend" dan "frontend" sebagai dua baris. Mesin skor **tidak** terpengaruh, karena `canonicalSkills` mengambil level tertinggi (`lib/scoring/rules.ts:41-50`) dan tidak pernah menjumlahkan. Yang tersisa: data ganda di database dan baris ganda yang membingungkan di formulir.
+
+**H1-02 — Skill di luar taksonomi tidak ditolak maupun diperingatkan.**
+`lib/validation/index.ts:52-58` menerima `skill_name` berupa teks bebas, sedangkan `lib/validation/index.ts:26-28` mewajibkan `required_skills` tugas berasal dari `SKILL_TAXONOMY`. Field formulir profil (`app/p/[code]/members/[id]/member-profile-client.tsx:384-390`) adalah input teks dengan placeholder "Contoh: Frontend, Python, Desain UI", sehingga pengguna diarahkan mengetik label yang tidak akan pernah cocok dengan skill wajib tugas.
+Dampak terukur (lihat bukti bagian 5): anggota dengan "Python" level 5 dan "Frontend" level 4 mendapat **S = 0** dan **peringatan R3 `r3_no_candidate`** pada tugas yang membutuhkan "pemrograman backend", meskipun secara makna ia mampu. Ini bukan bug normalisasi, melainkan konsekuensi taksonomi yang tidak dipetakan. Fungsi `isTaxonomySkill` dan `unmatchedSkillNames` sudah ada di mesin tetapi **tidak dipakai di jalur simpan maupun API mana pun**.
+
+**H1-03 — Pesan validasi kapasitas masih teks mentah Zod.**
+`lib/validation/index.ts:53` memakai `z.number().int().positive()` tanpa pesan kustom, sehingga keluaran berbahasa Inggris: "Too small: expected number to be >0". Pesan lain sudah berbahasa Indonesia. UI menyaringnya (`member-profile-client.tsx:129-134`) dan menampilkan kalimat sendiri, jadi pengguna tidak melihat teks ini di layar; tetapi respons API mentah pada field `details` tetap memuatnya.
+
+**H1-04 — Kapasitas 0 tidak dapat disimpan.**
+`lib/validation/index.ts:53` menolak kapasitas 0, `lib/validation/index.ts:53` dan `005_atomic_update_member_profile.sql:31-33` sama-sama menolaknya. Akibatnya skenario PRD S09 dan S19 ("anggota jam tersedia nol") hanya dapat muncul dari data lama atau fixture tes, tidak dari input pengguna baru. R1 tetap benar sebagai aturan; yang tidak tersedia adalah jalan bagi pengguna untuk menghasilkan kondisi itu. Ini bukan pelanggaran aturan, melainkan pertanyaan cakupan.
+
+**Yang sudah benar dan tidak diubah.** Batas nama 60 karakter, catatan 300 karakter, level dan minat 1-5 bilangan bulat, penolakan skill kosong, penolakan estimasi jam nol/negatif/desimal, penolakan `required_skills` di luar taksonomi, dan penolakan bobot yang bukan 100% atau mengandung NaN. Semuanya sudah berjalan dan sekarang dipatok tes.
+
+### 2. Perubahan
+
+Satu file baru: **`test/validation/hardening-01-fase-1.test.ts`** (29 tes). Tidak ada perubahan kode produksi. Tidak ada perubahan schema. Tidak ada migration.
+
+### 3. Pengujian
+
+```
+npx vitest run test/validation/hardening-01-fase-1.test.ts → 29 passed (29)
+npx vitest run                                             → 37 file passed | 1 skipped
+                                                             631 tes passed | 7 skipped
+npm run typecheck                                          → 0 error (exit 0)
+npm run lint                                               → 0 error, 26 warning
+npm run build                                              → sukses, 12 rute
+```
+
+Baseline Fase 0 adalah 602 tes lulus. Sekarang 631, naik 29 tanpa satu pun tes lama dihapus atau dilemahkan.
+
+**Uji mutasi untuk memastikan tes tidak kosong.** Saya membalik `canonicalSkills` agar mengambil level *terendah* alih-alih tertinggi, lalu menjalankan ulang:
+
+```
+× memakai level tertinggi ketika dua label runtuh ke skill yang sama
+× H1-01: validator profil MENERIMA nama skill duplikat apa adanya
+Tests  2 failed | 27 passed (29)
+```
+
+Berkas dikembalikan dan 29 tes lulus lagi, jadi tes benar-benar menangkap perubahan perilaku dan bukan sekadar mengulang keluaran mesin.
+
+### 4. Regression
+
+- Perilaku yang tetap berjalan: seluruh validasi profil dan tugas, normalisasi skill, penanganan duplikat (level tertinggi menang), dan validasi bobot. Tidak ada yang berubah karena tidak ada kode produksi yang disentuh.
+- Perilaku yang berubah: tidak ada.
+- Risiko tersisa: H1-01 sampai H1-04 masih terbuka (bagian 7).
+
+### 5. Bukti
+
+Bukti H1-02, dijalankan sebagai probe sementara lalu dihapus:
+
+```
+isTaxonomySkill(Python) = false
+isTaxonomySkill(pemrograman frontend) = true
+unmatchedSkillNames = [ 'Python', 'Frontend' ]
+hasQualifiedMember = false
+R3 warning? [ 'r3_no_candidate' ]
+S for m1 = 0
+```
+
+Bukti H1-01 dan H1-04:
+
+```
+duplicate accepted = true
+stored rows = [{"skill_name":"Frontend","skill_level":2,...},{"skill_name":"frontend","skill_level":5,...}]
+capacity 0 accepted = false
+issue = Too small: expected number to be >0
+```
+
+Bukti bahwa duplikat tidak merusak skor:
+
+```
+single Frontend=2          -> {"frontend":2}
+Frontend=2 + frontend=4    -> {"frontend":4}
+skillLevelFor(Frontend) = 4
+```
+
+### 6. Gerbang
+
+Fase 2 (audit mesin skor) **boleh dimulai**. Gerbang Fase 1 terpenuhi: data valid diterima, data tidak valid ditolak dengan pesan yang jelas, dan celah yang tersisa tercatat dengan bukti, bukan disembunyikan.
+
+### 7. Keputusan pengguna
+
+**K-1 — H1-02, skill di luar taksonomi.** Pilih satu:
+(a) Biarkan seperti sekarang: profil menyimpan teks bebas, normalisasi hanya menyamakan bentuk, dan pengguna bertanggung jawab mengetik nama yang sama dengan taksonomi.
+(b) Tambahkan **peringatan** (bukan penolakan) saat menyimpan skill yang tidak dikenali taksonomi, memakai `unmatchedSkillNames` yang sudah ada. Tidak mengubah data, tidak menambah dependency.
+(c) Ganti field teks bebas menjadi pilihan dari taksonomi. Ini perubahan UI dan berarti label lama di luar taksonomi menjadi tidak dapat diedit tanpa dikonversi.
+
+**K-2 — H1-04, kapasitas 0.** Pilih satu:
+(a) Biarkan: kapasitas 0 hanya muncul dari data lama; R1 tetap diuji lewat fixture.
+(b) Izinkan kapasitas 0 disimpan. Ini butuh perubahan `memberProfileSchema`, pengecualian pada constraint `members_capacity_positive` (migration 003), dan penyesuaian RPC. **Berarti migration**, dan sesuai instruksi saya berhenti sebelum menyentuh database.
+
+**K-3 — H1-01, skill duplikat.** Pilih satu:
+(a) Biarkan; mesin sudah aman karena mengambil level tertinggi.
+(b) Tolak duplikat setelah normalisasi di validator dengan pesan yang jelas. Tanpa migration, hanya perubahan Zod.
+(c) Tolak di validator dan tambahkan `UNIQUE(member_id, skill_name)` di database. **Berarti migration.**
+
+**K-4 — H1-03, pesan kapasitas.** Perbaikan kecil dan aman: tambahkan pesan Indonesia pada `capacity`. Tidak mengubah perilaku, hanya teks. Saya dapat mengerjakannya kapan saja tanpa keputusan tambahan, kecuali Anda ingin pesan itu tetap seperti sekarang.
+
+### Fase 1 — Perbaikan setelah keputusan pengguna
+
+Keputusan yang diterima: **K-1(b)** peringatan skill di luar taksonomi, **K-2(a)** kapasitas 0 dibiarkan, **K-3(b)** duplikat ditolak di Zod tanpa migration, **K-4** pesan kapasitas jadi bahasa Indonesia. Tidak ada migration, tidak ada perubahan database.
+
+**File yang diubah (5):**
+
+1. `lib/validation/index.ts` — pesan Indonesia untuk `capacity` dan `skill_name`; aturan `refine` yang menolak dua baris skill yang sama setelah normalisasi; fungsi baru `skillTaxonomyWarnings`.
+2. `lib/scoring/rules.ts` — `normalizeSkillName` sekarang memangkas spasi **setelah** meruntuhkan pemisah. Bug nyata: `"koordinasi_"` menormalkan ke `"koordinasi "` (spasi di ujung) sehingga tidak sama dengan `"koordinasi"`, dan satu skill terlihat seperti dua.
+3. `app/api/projects/[code]/members/[id]/route.ts` — mengembalikan `warnings` bila ada; bentuk respons lama dipertahankan persis ketika tidak ada peringatan.
+4. `app/p/[code]/members/[id]/member-profile-client.tsx` — banner peringatan `data-testid="skill-taxonomy-warning"`, tidak menggantikan pesan sukses karena simpan tetap berhasil.
+5. `test/validation/hardening-01-fase-1.test.ts` dan `test/api/member-profile.test.ts` — 37 + 7 tes.
+
+**Bug yang ditemukan saat mengerjakan, di luar daftar awal:** `normalizeSkillName` tidak memangkas spasi hasil runtuhan pemisah. Ini kelas bug yang sama dengan T-ROOT-CAUSE-03 (satu skill terbaca sebagai dua) tetapi pada sisi yang belum tertangani, yaitu pemisah di ujung nama. Dampaknya: `"koordinasi"` dan `"koordinasi_"` tidak lagi dianggap duplikat oleh validasi, dan tidak akan pernah cocok di mesin skor. Diperbaiki di akar dengan satu `.trim()` tambahan, bukan dengan pengecualian di pemanggil.
+
+**Kesalahan hitung manual saya sendiri (dua kali, keduanya di tes):**
+- Saya menulis fixture `'Koordina-si'` mengharapkan ia dinormalkan menjadi `"koordinasi"`. Salah: hyphen di tengah kata adalah pemisah kata, jadi hasilnya `"koordina si"`, kata yang berbeda. Fixture diperbaiki, dan saya menambahkan tes yang menegaskan validator **tidak** menganggap beda kata sebagai duplikat.
+- Fixture pertama saya merusak kasus hyphen dengan mengganti `-` menjadi spasi sebelum dikirim, sehingga yang diuji bukan lagi kasus hyphen.
+
+**Hasil gerbang:**
+
+| Gerbang | Fase 0 | Fase 1 awal | Fase 1 perbaikan |
+|---|---|---|---|
+| Tes | 602 lulus | 631 lulus | **642 lulus, 7 dilewati** |
+| Typecheck | 0 error | 0 error | **0 error** |
+| Lint | 0 error, 26 warning | 0 error, 26 warning | **0 error, 26 warning** |
+| Build | 12 rute | 12 rute | **sukses, 12 rute** |
+
+Naik 40 tes dari baseline tanpa satu pun tes lama dihapus; dua tes yang mengunci celah lama diperbarui karena perilakunya memang sengaja berubah, dan alasan perubahan ditulis di komentar masing-masing tes.
+
+**Bukti bahwa perubahan perilaku nyata:**
+
+```
+sebelum: capacity 0  → "Too small: expected number to be >0"
+sesudah: capacity 0  → "Kapasitas waktu harus lebih besar dari 0 jam."
+
+sebelum: skills [Frontend=2, frontend=5] → accepted (2 baris tersimpan)
+sesudah: skills [Frontend=2, frontend=5] → rejected ("tidak boleh dicantumkan dua kali")
+
+sebelum: normalizeSkillName("koordinasi_") → "koordinasi "  (tidak sama)
+sesudah: normalizeSkillName("koordinasi_") → "koordinasi"   (sama)
+
+sebelum: PUT skills [Python=5] → 200 tanpa peringatan, S = 0 di matriks
+sesudah: PUT skills [Python=5] → 200 + warnings[0] menyebut "Python" dan daftar taksonomi
+```
+
+**Yang tidak diperbaiki dan tetap tercatat:** K-2(a) kapasitas 0 masih tidak dapat disimpan, jadi skenario S09/S19 tetap hanya dapat dibuat lewat fixture. Skill bebas di luar taksonomi tetap tersimpan apa adanya; peringatan hanya memberi tahu, tidak mengonversi, dan tidak ada pemetaan sinonim yang dikarang.

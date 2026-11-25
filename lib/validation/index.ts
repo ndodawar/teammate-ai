@@ -1,5 +1,8 @@
 import { z } from 'zod';
 import { SKILL_TAXONOMY } from '@/lib/scoring/types';
+// Shared with the engine so the dedup rule and the scoring lookup agree on what
+// "the same skill" means: same case, spacing, underscore and hyphen handling.
+import { normalizeSkillName, isTaxonomySkill } from '@/lib/scoring/rules';
 
 export const taskSchema = z.object({
   title: z.string().trim().min(1, 'Judul tugas wajib diisi.'),
@@ -44,14 +47,54 @@ export const memberSchema = z.object({
 export const memberProfileSchema = z.object({
   name: z.string().trim().min(1).max(60),
   note: z.string().max(300).nullable().optional(),
-  capacity: z.number().int().positive(),
-  skills: z.array(
-    z.object({
-      skill_name: z.string().trim().min(1),
-      skill_level: z.number().int().min(1).max(5),
-      interest_level: z.number().int().min(1).max(5),
-    })
-  ),
+  /*
+   * MASTER-MATRIX-HARDENING-01 H1-03: `positive()` on its own emits Zod's own
+   * English text ("Too small: expected number to be >0") into the API `details`,
+   * while every other message here is an Indonesian sentence. Supplying the
+   * message keeps the rejection identical and only changes what the caller
+   * reads.
+   */
+  capacity: z
+    .number('Kapasitas waktu wajib diisi berupa angka.')
+    .int('Kapasitas waktu harus berupa angka bulat.')
+    .positive('Kapasitas waktu harus lebih besar dari 0 jam.'),
+  skills: z
+    .array(
+      z.object({
+        skill_name: z.string().trim().min(1, 'Nama keterampilan wajib diisi.'),
+        skill_level: z.number().int().min(1).max(5),
+        interest_level: z.number().int().min(1).max(5),
+      })
+    )
+    /*
+     * H1-01, user decision K-3(b): reject two rows that name the same skill once
+     * spelling is normalised ("Frontend" and "frontend"), instead of storing both
+     * and leaving the form with two confusing rows.
+     *
+     * The scoring engine already survived duplicates by taking the highest level,
+     * so this is not a correctness fix for the score. It stops the duplicate at
+     * the door, which is cheaper than explaining later why a member has the same
+     * skill twice at different levels.
+     *
+     * Only the duplicate is rejected; the remaining rows are kept verbatim, and
+     * stored data is untouched (no migration, no backfill).
+     */
+    .refine(
+      (rows) => {
+        const seen = new Set<string>();
+        for (const row of rows) {
+          const key = normalizeSkillName(row.skill_name);
+          if (!key) continue;
+          if (seen.has(key)) return false;
+          seen.add(key);
+        }
+        return true;
+      },
+      {
+        message:
+          'Keterampilan yang sama tidak boleh dicantumkan dua kali. Gabungkan menjadi satu baris.',
+      }
+    ),
 });
 
 export const projectSchema = z.object({
@@ -107,3 +150,36 @@ export const recommendRequestSchema = z.object({
   weights: weightsSchema.optional(),
   isFallback: z.boolean().optional(),
 });
+
+/**
+ * MASTER-MATRIX-HARDENING-01 H1-02, user decision K-1(b): warn, never reject.
+ *
+ * A member's skills are free text, while a task's `required_skills` must come
+ * from `SKILL_TAXONOMY`. Normalisation only equates spellings, so a member typed
+ * as "Python" or "Frontend" holds a skill no task can ever require, and the score
+ * silently reads S = 0 with an R3 warning that looks like missing ability.
+ *
+ * Rejecting the save would throw away what the user wrote, which is not ours to
+ * decide. Blocking the whole profile for a label the user may legitimately want
+ * is also worse than the problem. So this returns a list of human sentences for
+ * the names the engine cannot resolve, and the caller shows them; the save
+ * proceeds exactly as before.
+ *
+ * Deliberately NOT a synonym map: "Python" is not translated to "pemrograman
+ * backend". Inventing that mapping would be guessing at meaning, and the
+ * vocabulary of every study group is not ours to assume.
+ */
+export function skillTaxonomyWarnings(skills: { skill_name: string }[]): string[] {
+  const unmatched = skills
+    .map((row) => row.skill_name.trim())
+    .filter((name) => name.length > 0 && !isTaxonomySkill(name));
+
+  if (unmatched.length === 0) return [];
+
+  const unique = Array.from(new Set(unmatched));
+  const list = unique.map((name) => `"${name}"`).join(', ');
+  return [
+    `${list} tidak ada dalam daftar keterampilan sistem, sehingga tidak akan cocok dengan keterampilan wajib tugas mana pun. ` +
+      `Gunakan salah satu dari: ${SKILL_TAXONOMY.join(', ')}. Profil tetap tersimpan.`,
+  ];
+}

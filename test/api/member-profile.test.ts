@@ -130,5 +130,77 @@ describe('FR-03 Profil Anggota API', () => {
     mockClient = stubClient({ project: OK_PROJECT, member: OK_MEMBER });
     const res = await putRequest({ name: 'Rani', capacity: 0, skills: [] });
     expect(res.status).toBe(400);
+    // H1-03: penolakan sama, tetapi pesannya kini bahasa Indonesia.
+    const json = await res.json();
+    expect(json.error).toBe('Data profil anggota tidak valid.');
+  });
+
+  it('PUT: menolak skill duplikat tanpa menyimpan apa pun', async () => {
+    mockClient = stubClient({ project: OK_PROJECT, member: OK_MEMBER });
+    const rpcSpy = vi.spyOn(mockClient, 'rpc');
+
+    const res = await putRequest({
+      name: 'Rani',
+      capacity: 40,
+      skills: [
+        { skill_name: 'koordinasi', skill_level: 3, interest_level: 3 },
+        { skill_name: 'KOORDINASI', skill_level: 4, interest_level: 3 },
+      ],
+    });
+
+    expect(res.status).toBe(400);
+    // RPC tidak pernah dipanggil, jadi tidak ada data setengah tersimpan.
+    expect(rpcSpy).not.toHaveBeenCalled();
+  });
+
+  it('PUT: menyimpan skill di luar taksonomi dan mengembalikan peringatan', async () => {
+    const updatedData = {
+      id: MEMBER_ID,
+      name: 'Rani',
+      capacity: 40,
+      note: null,
+      skills: [{ id: 's3', skill_name: 'Python', skill_level: 5, interest_level: 5 }],
+    };
+    mockClient = stubClient({ rpc: { data: updatedData, error: null } });
+
+    const res = await putRequest({
+      name: 'Rani',
+      capacity: 40,
+      skills: [{ skill_name: 'Python', skill_level: 5, interest_level: 5 }],
+    });
+
+    // H1-02 / K-1(b): penyimpanan tetap berhasil (200), bukan ditolak.
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    // Data profil tetap di akar respons, seperti sebelumnya.
+    expect(json.name).toBe('Rani');
+    expect(json.skills[0].skill_name).toBe('Python');
+    // Dan peringatan ikut, tanpa membatalkan simpan.
+    expect(Array.isArray(json.warnings)).toBe(true);
+    expect(json.warnings).toHaveLength(1);
+    expect(json.warnings[0]).toContain('"Python"');
+  });
+
+  it('PUT: tidak mengirim field warnings ketika semua skill ada di taksonomi', async () => {
+    const updatedData = {
+      id: MEMBER_ID,
+      name: 'Rani',
+      capacity: 40,
+      note: null,
+      skills: [{ id: 's4', skill_name: 'koordinasi', skill_level: 3, interest_level: 3 }],
+    };
+    mockClient = stubClient({ rpc: { data: updatedData, error: null } });
+
+    const res = await putRequest({
+      name: 'Rani',
+      capacity: 40,
+      skills: [{ skill_name: 'koordinasi', skill_level: 3, interest_level: 3 }],
+    });
+
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    // Bentuk respons lama dipertahankan persis ketika tidak ada peringatan.
+    expect(json.warnings).toBeUndefined();
+    expect(json.name).toBe('Rani');
   });
 });

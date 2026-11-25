@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { memberProfileSchema, projectCodeSchema } from '@/lib/validation';
+import { memberProfileSchema, projectCodeSchema, skillTaxonomyWarnings } from '@/lib/validation';
 import { getSupabaseClient } from '@/lib/db/project';
 
 interface RouteContext {
@@ -105,5 +105,14 @@ export async function PUT(request: Request, context: RouteContext) {
     return NextResponse.json({ error: 'Gagal memperbarui profil anggota.' }, { status: 500 });
   }
 
-  return NextResponse.json(data);
+  /*
+   * H1-02 / K-1(b): the profile is saved exactly as before, and any skill the
+   * engine cannot resolve comes back as a warning so the screen can say so. The
+   * response keeps `data` at the top level because existing callers read
+   * `json.name`, `json.skills` and so on from the root; `warnings` is additive.
+   */
+  const warnings = skillTaxonomyWarnings(skills);
+  return NextResponse.json(
+    warnings.length > 0 ? { ...(data as object), warnings } : data
+  );
 }
