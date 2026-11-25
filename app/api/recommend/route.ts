@@ -7,6 +7,7 @@ import { AiRun, sanitizeErrorMessage } from '@/lib/ai/call-budget';
 import { recordAiRun } from '@/lib/ai/ai-run';
 import { recommendRequestSchema } from '@/lib/validation';
 import { Task, Member, SkillTag } from '@/lib/scoring/types';
+import { normalizeSkillName } from '@/lib/scoring/rules';
 
 export async function POST(request: Request) {
   // FR-09/NFR-43: one run per recommendation process, created before any AI call.
@@ -71,11 +72,23 @@ export async function POST(request: Request) {
     const members: Member[] = (membersData || []).map((m) => {
       const skills: Record<string, number> = {};
       const interests: Record<string, number> = {};
-      
+
       const mSkills = (m as { member_skills: { skill_name: string; skill_level: number; interest_level: number }[] }).member_skills || [];
       mSkills.forEach((s) => {
-        skills[s.skill_name] = s.skill_level;
-        interests[s.skill_name] = s.interest_level;
+        /*
+         * T-ROOT-CAUSE-03: stored skill names are free text ("Frontend",
+         * "Penulisan Akademik"), while a task's required_skills are taxonomy
+         * tags. Keying this map by the raw string meant a member holding the
+         * skill at level 5 matched nothing, so S scored 0 and R3 reported "no
+         * capable member" for a roster that was in fact capable. The canonical
+         * key is written first so every downstream lookup agrees; the raw name
+         * is kept as a fallback for any reader that still expects it.
+         */
+        const canonical = normalizeSkillName(s.skill_name);
+        if (!canonical) return;
+        // Highest level wins when two labels collapse to the same skill.
+        skills[canonical] = Math.max(skills[canonical] ?? 0, s.skill_level);
+        interests[canonical] = Math.max(interests[canonical] ?? 0, s.interest_level);
       });
 
       return {

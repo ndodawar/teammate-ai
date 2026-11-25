@@ -1,5 +1,6 @@
 import { Member, Task, ScoreBreakdown } from './types';
 import { DEFAULT_INTEREST_LEVEL, MAX_SKILL_LEVEL, MAX_INTEREST_LEVEL, EMBEDDING_COSINE_MIN, EMBEDDING_COSINE_MAX, DEFAULT_WEIGHTS, FALLBACK_WEIGHTS } from './constants';
+import { skillLevelFor } from './rules';
 
 export function normalizeCosineSimilarity(rawCosine: number): number {
   if (rawCosine <= EMBEDDING_COSINE_MIN) return 0;
@@ -11,8 +12,10 @@ export function computeSkillMatch(task: Task, member: Member): number {
   if (task.required_skills.length === 0) return 1.0;
   let totalLevel = 0;
   for (const skill of task.required_skills) {
-    const level = member.skills[skill] ?? 0;
-    totalLevel += level;
+    // T-ROOT-CAUSE-03: resolved through the same normalisation R3 uses, so a
+    // skill the member really holds can no longer score 0 because the stored
+    // label differs in case, spacing or a hyphen from the taxonomy tag.
+    totalLevel += skillLevelFor(member, skill);
   }
   const average = totalLevel / task.required_skills.length;
   return average / MAX_SKILL_LEVEL;
@@ -31,8 +34,17 @@ export function computeInterest(task: Task, member: Member): number {
   if (!member.interests) {
     return (DEFAULT_INTEREST_LEVEL - 1) / (MAX_INTEREST_LEVEL - 1);
   }
+  // Same normalisation as skills: interests are stored under the same free-text
+  // labels, so an unnormalized lookup dropped every interest to the default.
+  const normalized = new Map<string, number>();
+  for (const [rawName, value] of Object.entries(member.interests)) {
+    if (typeof value !== 'number' || !Number.isFinite(value)) continue;
+    const key = rawName.trim().toLowerCase().replace(/[\s_-]+/g, ' ');
+    if (!normalized.has(key)) normalized.set(key, value);
+  }
   for (const skill of task.required_skills) {
-    const interest = member.interests[skill] ?? DEFAULT_INTEREST_LEVEL;
+    const key = skill.trim().toLowerCase().replace(/[\s_-]+/g, ' ');
+    const interest = normalized.get(key) ?? DEFAULT_INTEREST_LEVEL;
     totalInterest += interest;
   }
   const avgInterest = totalInterest / task.required_skills.length;

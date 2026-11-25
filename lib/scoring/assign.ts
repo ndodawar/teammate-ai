@@ -1,12 +1,14 @@
 import { Member, Task, CandidateScore, TaskAssignment, AssignmentResult, ScoreBreakdown, AssignmentWarning } from './types';
 import { computeScore } from './score';
-import { checkR1, checkR2, checkR3, hasQualifiedMember } from './rules';
+import { checkR1, checkR2, checkR3, hasQualifiedMember, skillLevelFor } from './rules';
 import { DEFAULT_WEIGHTS, FALLBACK_WEIGHTS, WORKLOAD_CAP_MULTIPLIER } from './constants';
 
 export type TaskMemberCosineMap = Record<string, Record<string, number>>;
 
 export function generateExplanation(task: Task, member: Member, breakdown: ScoreBreakdown): string {
-  const matchedSkills = task.required_skills.filter(s => (member.skills[s] ?? 0) >= 3);
+  // T-ROOT-CAUSE-03: the same normalisation the score uses, so the sentence
+  // cannot name a skill the score did not credit.
+  const matchedSkills = task.required_skills.filter(s => skillLevelFor(member, s) >= 3);
   const skillText = matchedSkills.length > 0
     ? `memiliki keterampilan relevan (${matchedSkills.join(', ')})`
     : `memenuhi persyaratan dasar`;

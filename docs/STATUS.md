@@ -4353,3 +4353,257 @@ Yang benar-benar diverifikasi: komponen dirender ke markup statis lewat `renderT
 ### Putusan
 
 Tiga berkas implementasi diubah, enam berkas total bersama tes. Mesin penilaian, bobot, dan R1–R5 tidak disentuh, dan tidak ada kalimat alasan yang dibentuk dari data yang tidak ada: alasan hanya dibuat bila `assignment.scores[owner.id]?.isEligible` benar, sedangkan pemilik hasil fallback R3 mendapat kalimat "saran terbaik, belum memenuhi kemampuan minimum" alih-alih pujian. Semua gerbang lulus (525 tes, 0 error typecheck, 0 error lint, build 12 rute). Verifikasi browser dan screenshot **BLOCKED**, dilaporkan apa adanya.
+
+---
+
+## T-ROOT-CAUSE-03 — Audit dan perbaikan R2, R3, dan mesin penugasan
+
+Tanggal: sesi 2026-02. Status: **selesai di kode, belum di-commit.**
+
+### 1. Kesimpulan utama
+
+Laporan menyebut dua gejala dan keduanya punya **penyebab yang berbeda**. Gejala R2 bukan bug; gejala R3 adalah bug nyata.
+
+| Gejala | Penyebab | Sifat |
+|---|---|---|
+| 0 dari 4 tugas terbagi, ideal 0,75 jam, batas 0,9375 jam | Aritmetika R2 sesuai PRD, bukan kesalahan hitung | Bukan bug — batas tidak boleh dilonggarkan |
+| Semua kandidat "GUGUR R2" padahal 1 jam | Tugas 1 jam memang melebihi batas 0,9375 jam | Bukan bug |
+| Peringatan R3 muncul padahal anggota punya skill | Nama skill anggota dan skill tugas dibandingkan sebagai teks mentah | **Bug pemetaan data** |
+| Komponen S = 0 pada kandidat yang punya skill | Akar yang sama dengan R3 | **Bug pemetaan data** |
+
+### 2. Penyebab utama R2 (bukan bug, dibuktikan)
+
+Instruksi melarang melonggarkan R2, jadi angka yang dilaporkan diperiksa ulang dan dicocokkan dengan PRD §5.2 Hard Constraints:
+
+- Total estimasi: **6 jam** (4 tugas).
+- Anggota yang ikut dibagi: **8** (semuanya berkapasitas > 0, jadi R1 meloloskan semua).
+- Beban ideal = total jam ÷ jumlah anggota = 6 ÷ 8 = **0,75 jam**.
+- Batas R2 = 1,25 × beban ideal = **0,9375 jam**.
+
+Ketiga angka itu identik dengan yang dilaporkan. Lalu mengapa tugas 1–2 jam tidak layak?
+
+`checkR2` memeriksa `currentLoad + taskHours <= 1,25 × idealLoad`. Karena tidak ada satu pun tugas yang berhasil dibagi, `currentLoad` setiap anggota tetap **0** — jadi penolakan murni berasal dari estimasi tugas itu sendiri: 1 jam > 0,9375 jam.
+
+Alasannya adalah aljabar, bukan pengaturan yang keliru. Untuk satu tugas sebesar H jam yang dibagi ke n anggota: beban ideal = H/n, batas = 1,25·H/n, dan tugas muat hanya jika H ≤ 1,25·H/n, yaitu **n ≤ 1,25**. Dengan 8 anggota, satu tugas tunggal tidak akan pernah muat berapa pun estimasinya, karena pembilang dan penyebut berskala sama. Aturan ini bekerja persis seperti yang ditetapkan PRD, dan batas R2 **tidak diubah**.
+
+Yang benar-benar menentukan apakah sebuah tugas bisa dibagi adalah **bagian tugas terhadap total**, bukan jumlah tugas. Diuji langsung ke mesin:
+
+| Kasus | Total | Beban ideal | Batas | Hasil |
+|---|---|---|---|---|
+| 8 anggota, 8 tugas × 1 jam | 8 jam | 1 jam | 1,25 jam | **8 tugas terbagi** |
+| 8 anggota, 4 tugas × 2 jam | 8 jam | 1 jam | 1,25 jam | **0 tugas terbagi** |
+
+Total jam sama, batas sama; yang berbeda hanya besar tiap tugas. Maka jalan keluarnya adalah memperkecil bagian tiap tugas (fitur Pecah Tugas), bukan menaikkan batas.
+
+### 3. Penyebab utama R3 dan S = 0 (bug nyata, diperbaiki)
+
+Ini akar masalah yang sebenarnya. Formulir profil anggota menyimpan skill sebagai **teks bebas** (input teks dengan placeholder "Contoh: Frontend, Python, Desain UI"), sedangkan tugas menyimpan `required_skills` yang **divalidasi terhadap taksonomi tetap** (`SKILL_TAXONOMY`). Setiap pembacaan memakai perbandingan string persis:
+
+```ts
+member.skills[skill] ?? 0   // "Penulisan Akademik" ≠ "penulisan akademik"
+```
+
+Akibatnya anggota yang benar-benar menguasai skill pada level 5 mendapat **S = 0** dan **gagal R3**. Dibuktikan: 12 dari 12 label yang wajar diketik pengguna (Frontend, Python, Desain UI, Riset, Testing, …) menghasilkan S = 0 untuk skill wajib yang sebenarnya mereka punya.
+
+Bukti sebelum/sesudah:
+
+| Pemeriksaan | Sebelum | Sesudah |
+|---|---|---|
+| S untuk anggota level 5 berlabel "Penulisan Akademik" | **0** | **1,0** |
+| R3 untuk roster campuran ejaan | gagal, peringatan `r3_no_candidate` | lolos |
+
+**Perbaikan:** satu fungsi normalisasi `normalizeSkillName` di `lib/scoring/rules.ts` (trim, huruf kecil, spasi/underscore/hyphen disamakan) dan `skillLevelFor` yang dipakai **semua** pembaca: R3, `hasQualifiedMember`, komponen S, komponen M, `matchingSkills`, `missingSkills`, dan `generateExplanation`. Peta skill di `/api/recommend` juga sekarang menulis kunci kanonik. Level skill anggota **tidak dinaikkan** dan **tidak ada skill yang dikarang**: nama yang berbeda ejaan kini dikenali sebagai skill yang sama, itu saja. R3 sendiri tidak diubah definisinya (tetap "minimal satu skill wajib level ≥ 3").
+
+### 4. Penyebab lain yang ditemukan dan diperbaiki
+
+**Penghitungan ganda saat Pecah Tugas.** Fitur ini membuat subtugas yang totalnya tepat sama dengan estimasi induk (dijamin `validateSplit`), tetapi **tugas induk dibiarkan**. Jam yang sama jadi terhitung dua kali: total usaha membengkak, beban ideal ikut naik, batas R2 ikut naik, dan tugas induk tetap muncul sebagai tugas tak terbagi. Sekarang induk dihapus **setelah semua bagian berhasil tersimpan** (jika ada bagian gagal, induk tidak disentuh), dan teks panel serta pesan sukses menyatakannya.
+
+**Label beban anggota menyesatkan.** Tampilan "0 / 40 jam" terbaca seolah 40 jam adalah beban aktual. Sekarang tertulis **"beban 0.0 jam · tersedia 40 jam"**, dengan penjelasan bahwa angka kedua adalah kapasitas.
+
+**Saran pemecahan yang terlalu percaya diri.** Hint R2 dulu menyiratkan pemecahan pasti menyelesaikan masalah. Sekarang dinyatakan bahwa batas ikut berubah setelah pemecahan dan hasilnya perlu diperiksa lagi, karena pemecahan mengubah rata-rata per anggota.
+
+### 5. Berkas yang diperbaiki
+
+| Berkas | Perubahan |
+|---|---|
+| `lib/scoring/rules.ts` | `normalizeSkillName`, `canonicalSkills`, `skillLevelFor`, `isTaxonomySkill`, `unmatchedSkillNames`, `normalizedSkillMap`; R3 dan `hasQualifiedMember` memakai normalisasi |
+| `lib/scoring/score.ts` | Komponen S dan M memakai `skillLevelFor` / normalisasi |
+| `lib/scoring/explain-local.ts` | `matchingSkills` dan `missingSkills` konsisten dengan R3 |
+| `lib/scoring/assign.ts` | `generateExplanation` konsisten dengan skor |
+| `app/api/recommend/route.ts` | Peta skill anggota memakai kunci kanonik, level tertinggi menang |
+| `app/p/[code]/result/result-client.tsx` | Induk dihapus setelah pecah; teks panel & hint R2 diperbaiki |
+| `components/recommendations/result-dashboard.tsx` | Label beban "beban … · tersedia …" |
+| `test/scoring/root-cause-03.test.ts` | **35 tes regresi baru** (berkas tes baru) |
+| `test/ui/result-dashboard.test.ts` | 1 asersi menyesuaikan label beban |
+
+Rumus K/S/C/M, bobot 40/30/20/10, definisi R1–R5, dan batas 1,25 **tidak diubah**.
+
+### 6. Hasil pengujian
+
+`test/scoring/root-cause-03.test.ts` — 35 tes, semua lulus, mencakup 10 kondisi yang diminta:
+
+| Kondisi yang diminta | Tes |
+|---|---|
+| 1. Tugas 2 jam vs batas 0,9375 jam tidak dipaksakan | ✓ (kap 0,3125 jam; tanpa pemilik) |
+| 2. Subtugas yang masing-masing muat bisa terbagi | ✓ (8 × 1 jam terbagi semua) |
+| 3. Semua skill di bawah level 3 → R3 sesuai PRD | ✓ (peringatan tetap, tidak ada kandidat layak) |
+| 4. Skill memenuhi R3 → kandidat dipertimbangkan | ✓ |
+| 5. Nama skill sama, ejaan/ID berbeda → S tidak salah | ✓ (6 ejaan, S identik dan bukan 0) |
+| 6. Induk + subtugas tidak dihitung ganda | ✓ |
+| 7. Banyak tugas → beban kumulatif benar | ✓ |
+| 8. Tugas terkunci → R5 dipertahankan | ✓ (`r2_locked_overload`) |
+| 9. Refresh & ekspor konsisten | ✓ (CSV/teks, keluaran identik antar-run) |
+| 10. Skor tinggi tetapi tidak layak | ✓ (skor tetap tampil, tanpa pemilik) |
+
+Gerbang mutu:
+
+| Gerbang | Hasil |
+|---|---|
+| `npx vitest run --exclude "**/*.live.test.ts"` | **34 berkas / 560 tes lulus**, 0 gagal (naik dari 525) |
+| `npx tsc --noEmit` | **0 error** |
+| `npm run lint` | **0 error**, 26 warning (semuanya sudah ada sebelumnya) |
+| `npx next build` | **berhasil**, 12 rute |
+
+Tidak ada panggilan API nyata pada sesi ini. Seluruh tes deterministik dan memakai mock/fixture; tidak ada stress test, dan konfigurasi API key/model tidak disentuh.
+
+### 7. Status fitur Pecah Tugas
+
+Fitur sudah ada sebelumnya dan **tidak** dibuat ulang. Yang diperbaiki hanya cacat penghitungan gandanya. Statusnya sekarang: pengguna menentukan estimasi tiap bagian, total wajib sama dengan induk, induk dihapus setelah sukses, lalu seluruh tugas dinilai ulang lewat `/api/recommend` sehingga **R2 dan R3 diperiksa kembali per bagian**.
+
+Satu batasan jujur: **database tidak menyimpan relasi induk–anak**. `tasks` tidak punya kolom `parent_task_id`. Karena itu setelah pemecahan, bagian-bagian itu adalah tugas biasa bernama "(bagian N)"; tidak ada hierarki yang bisa ditampilkan atau dipulihkan. Menambah hierarki memerlukan migration baru, dan sesuai instruksi saya **berhenti sebelum migration** dan melaporkannya di sini.
+
+### 8. Masalah yang belum terselesaikan
+
+- **Hierarki subtugas butuh perubahan skema** (`parent_task_id` di `tasks`, plus migration dan penyesuaian API). Belum dikerjakan, sengaja.
+- **Label skill bebas tetap tidak disarankan ke taksonomi.** Normalisasi menyamakan huruf besar/kecil, spasi, underscore, dan hyphen, tetapi tidak menerjemahkan "Python" menjadi "pemrograman backend". Menerjemahkan sinonim butuh pemetaan eksplisit atau panggilan AI, dan keduanya di luar lingkup serta berisiko mengarang data. Perbaikan yang lebih tuntas adalah mengganti input bebas di formulir anggota menjadi pilihan dari taksonomi — perubahan UI terpisah.
+- **Verifikasi browser masih BLOCKED** (tidak ada alat browser di lingkungan ini), jadi perubahan teks dan tombol belum dilihat di layar.
+
+### 9. Rekomendasi revisi PRD
+
+Ini rekomendasi, bukan perubahan yang saya lakukan. Aturan R2 saat ini membuat satu tugas tunggal mustahil dibagi ke ≥ 2 anggota. Untuk satu tugas H jam dengan n anggota, syaratnya n ≤ 1,25 — jadi **setiap** proyek dengan satu tugas dan dua anggota atau lebih pasti gagal membagi, apa pun datanya.
+
+Yang bisa dipertimbangkan pengguna:
+
+1. **Definisikan "beban ideal" secara eksplisit di PRD.** Saat ini PRD hanya menulis "1,25 × beban ideal" tanpa rumus beban ideal. Implementasi memakai total jam tugas ÷ jumlah anggota yang lolos R1. Definisi ini yang membuat kap menyusut ketika anggota bertambah, dan definisi inilah yang perlu disetujui atau diganti secara tertulis.
+2. **Pertimbangkan pilihan basis pembagi**, misalnya kapasitas total anggota atau jumlah anggota, dan tuliskan konsekuensinya. Mengubahnya akan mengubah perilaku R2 secara luas, jadi harus lewat revisi PRD, bukan patch.
+3. **Cantumkan di PRD bahwa kasus "semua tugas gagal R2" adalah kondisi sah**, bukan cacat, beserta jalan keluarnya (memecah tugas). Saat ini kondisi itu mudah disalahartikan sebagai bug, dan itulah yang memicu ticket ini.
+
+Ketiga poin itu menyentuh aturan, jadi saya berhenti dan menyerahkannya ke pengguna sesuai instruksi "berhenti jika perubahan memerlukan revisi aturan R2/R3".
+
+### Putusan
+
+Gejala R2 terbukti **bukan bug**: 6 ÷ 8 = 0,75, batas 0,9375, dan tugas 1 jam memang melebihi batas karena syarat muatnya n ≤ 1,25. Batas tidak dilonggarkan. Gejala R3 dan S = 0 terbukti **bug pemetaan nama skill** dan sudah diperbaiki pada akarnya, dengan bukti S berubah dari 0 menjadi 1,0. Penghitungan ganda saat pemecahan tugas juga diperbaiki. 35 tes regresi baru mencakup 10 kondisi yang diminta dan semuanya lulus; typecheck 0 error, lint 0 error, build 12 rute. Hierarki subtugas dan verifikasi browser dilaporkan belum selesai. Tidak ada commit atau push.
+
+---
+
+## T-IMPLEMENT-05 — Finalisasi mesin rekomendasi dan matriks
+
+Tanggal: sesi ini. Status: **selesai dalam ruang lingkup yang bisa dibuktikan**; dua hal sengaja tidak dikerjakan dan dilaporkan di bagian 8. Tidak ada commit atau push. Tidak ada migration. Tidak ada data production yang disentuh.
+
+### 1. Kondisi awal sesi ini
+
+Baseline sebelum perubahan apa pun: `npx vitest run --exclude "**/*.live.test.ts"` → **34 file / 560 tes lulus**, typecheck 0 error, lint 0 error (26 warning lama). Perbaikan T-ROOT-CAUSE-03 (normalisasi skill, penghapusan induk setelah pecah) dan T-UI-* sudah ada di working tree dan **dipertahankan**, tidak ditulis ulang.
+
+### 2. File yang diubah pada sesi ini
+
+Satu file: **`test/scoring/implement-05.test.ts`** (baru, 41 tes). Tidak ada perubahan kode produksi pada sesi ini, karena Tahap 2 dan Tahap 3 sudah terpenuhi oleh pekerjaan sebelumnya — diverifikasi ulang di bawah, bukan diasumsikan.
+
+### 3. Verifikasi ulang Tahap 2 (mesin perhitungan)
+
+Diperiksa langsung di kode, bukan dari catatan:
+
+| Butir | Bukti di kode |
+|---|---|
+| R2 = total tugas aktif ÷ anggota yang lolos R1 | `lib/scoring/assign.ts:47-48` — `members.filter(m => checkR1(m))` sebagai pembagi, `totalEffort / loadBearingMembers.length` |
+| Batas = 1,25 × beban ideal | `WORKLOAD_CAP_MULTIPLIER` di `lib/scoring/constants.ts`, dipakai di `checkR2` |
+| Presisi penuh, pembulatan hanya tampilan | Perbandingan memakai `checkR2`, tidak ada `toFixed`/`Math.round` pada jalur keputusan; `toFixed` hanya muncul di string pesan (`assign.ts:81-83,158-159,235-241`) |
+| Beban awal diperhitungkan | `assign.ts:57-62` — `existingAssignments` yang terkunci masuk `memberLoads` sebelum alokasi |
+| Induk dan subtugas tidak dihitung ganda | Induk dihapus setelah semua bagian tersimpan (`result-client.tsx:419-442`), `validateSplit` memaksa jumlah bagian = estimasi induk |
+| R3 memakai normalisasi skill | `normalizeSkillName`/`skillLevelFor` di `lib/scoring/rules.ts`, dipakai `checkR3`, `hasQualifiedMember`, `computeSkillMatch`, `/api/recommend` |
+| Level skill tidak dinaikkan, skill tidak dikarang | Tidak ada penulisan level; label bebas hanya dinormalkan bentuknya (huruf besar/kecil, spasi, `_`, `-`) |
+| Bobot tidak berubah | `DEFAULT_WEIGHTS = { K: 0.4, S: 0.3, C: 0.2, M: 0.1 }`, dipatok oleh tes |
+| Hasil lama tidak dipakai | `app/api/recommend/route.ts` memanggil `globalAssign(tasks, members, [], ...)` dengan larik kosong, bukan rekomendasi tersimpan |
+| Satu penanggung jawab per tugas | Satu `primaryMemberId` per `TaskAssignment` |
+
+### 4. Verifikasi ulang Tahap 3–6 (tampilan)
+
+- Tab default `'ringkasan'` (`result-client.tsx:122`), jadi ponsel tidak pernah menerima tabel lebar lebih dulu.
+- Matriks lengkap **tidak dihapus**; berisi aksi kunci, tukar, pindahkan, dan pecah.
+- Ringkasan menampilkan total tugas, total anggota, berhasil dibagikan, perlu penyesuaian, beban ideal, batas R2 (`result-dashboard.tsx:245-278`).
+- Kartu tugas memuat status kelayakan, alasan, alternatif, dan solusi; R3 punya blok peringatan sendiri (`card-r3-<id>`).
+- Kotak geser diposisikan `relative` agar tabel tidak lolos ke seluruh halaman pada 390 px (`result-client.tsx`, komentar di atas `motion.div`).
+- Kedua tampilan membaca `currentResult` yang sama, jadi tidak ada dua sumber angka.
+
+### 5. Bug yang ditemukan dan diperbaiki pada sesi ini
+
+Tidak ada bug mesin baru. Yang ditemukan adalah **kesalahan hitung manual di tes saya sendiri**, dan itu justru bukti mesin benar. Tiga ekspektasi awal saya salah:
+
+1. **8 anggota × 8 tugas 1 jam.** Saya menulis `[0,0,0,0,0,0,0,1]` (satu anggota membawa semuanya). Salah: dua tugas = 2 jam > batas 1,25 jam, jadi satu-satunya susunan yang sah adalah satu tugas per anggota → `[1,1,1,1,1,1,1,1]`.
+2. **2 anggota, 4 tugas 1 jam + satu tugas terkunci 2 jam.** Saya menulis ideal 2. Salah: totalnya 5 jam (bukan 4), jadi ideal 2,5 dan batas 3,125. A berakhir 3 jam, B 2 jam.
+3. **3 anggota, 4 tugas 1 jam.** Saya menuntut 4 tugas terpasang. Salah: batas 1,6667 jam, jadi satu anggota hanya bisa memegang **satu** tugas 1 jam (dua tugas = 2 > 1,6667). Maksimum nyata **3 dari 4**, dan tugas keempat memang benar dibiarkan belum dibagikan. Ini bukan cacat; R2 memang mengikat lebih dulu daripada 5 jam kapasitas nominal.
+
+Ketiga koreksi ditulis sebagai komentar aritmetika manual di samping tiap asersi, supaya tes tidak bisa lulus hanya karena mengulang keluaran mesin.
+
+Satu temuan nyata yang dipastikan lewat debug: `assignOwner` **menolak** pemindahan yang melanggar R2, dan mengembalikan `{ changed: false, error }` tanpa menyentuh larik aslinya. Perilaku ini benar dan sekarang dipatok dua tes: satu kasus yang sah (berhasil, terkunci) dan satu kasus yang harus ditolak.
+
+### 6. Hasil regression test (Tahap 7)
+
+`npx vitest run test/scoring/implement-05.test.ts` → **41 tes, 41 lulus**. Ke-14 skenario yang diminta:
+
+| # | Skenario | Angka manual yang dipegang |
+|---|---|---|
+| 1 | 8 anggota, 8 tugas × 1 jam | ideal 1, batas 1,25, 8 tugas terpasang, 1 jam tiap anggota |
+| 2 | 8 anggota, 4 tugas × 2 jam | ideal 1, batas 1,25, **0 terpasang**, selisih 0,75, butuh 2 bagian |
+| 3 | Ketersediaan nol | R1 mengeluarkan anggota itu dari kolam **dan** dari pembagi: ideal 6, batas 7,5 |
+| 4 | Beban awal | total 5 jam → ideal 2,5, batas 3,125; A 3 jam, B 2 jam |
+| 5 | Kapitalisasi dan spasi | 6 penulisan berbeda → S identik 0,8; R3 dan S sepakat |
+| 6 | Skill di bawah R3 | level 2 tetap 0,4, tidak dinaikkan, `r3_no_candidate` |
+| 7 | Induk dan subtugas | tanpa induk ideal 2; dengan induk ideal 4 (bukti ganda); `validateSplit` menolak total tidak sama |
+| 8 | Perubahan estimasi | ideal 1 → 2; alokasi berubah sehingga tidak ada hasil lama dipakai |
+| 9 | Tugas terkunci | R5 mempertahankan pemilik 9 jam, `r2_locked_overload` dilaporkan, `toggleLockState` membuka kunci tanpa mengganti pemilik |
+| 10 | Perubahan bobot | skor 0,7767 → 0,8 tetapi jumlah penugasan tidak berubah (kelayakan ditentukan aturan) |
+| 11 | Tukar dan pindah | tukar menukar pemilik; pindah sah berhasil dan terkunci; pindah melanggar R2 ditolak |
+| 12 | Ekspor CSV | satu baris per tugas, kolom kelayakan terisi, tanda kutip aman, teks biasa memuat "Beban ideal: 1.0 jam" |
+| 13 | Refresh | masukan sama → keluaran identik byte demi byte; urutan tugas tidak mengubah beban |
+| 14 | 2, 3, 4 anggota | 4/3/4 tugas terpasang, tiap anggota ≤ batas, total jam utuh |
+
+Tambahan di luar 14: pemisahan tegas "skor bukan kelayakan" (skor tertinggi tetap tidak diangkat menjadi pemilik saat tidak layak) dan pemakuan bobot 40/30/20/10.
+
+### 7. Hasil gerbang mutu
+
+| Gerbang | Perintah | Hasil |
+|---|---|---|
+| Tes lengkap | `npx vitest run --exclude "**/*.live.test.ts"` | **35 file / 601 tes lulus** (naik dari 560) |
+| Typecheck | `npm run typecheck` | **0 error** |
+| Lint | `npm run lint` | **0 error, 26 warning** (semuanya sudah ada sebelumnya) |
+| Build | `npx next build` | **sukses, 12 rute** |
+
+Tidak ada tes lama yang dihapus atau dilemahkan.
+
+### 8. Status fitur Pecah Tugas
+
+Berfungsi, dan itu fitur lama yang diperbaiki — **bukan** fitur duplikat. Alurnya: `validateSplit` memastikan jumlah bagian = estimasi induk sebelum satu pun permintaan dikirim; bagian dibuat satu per satu dengan judul, deskripsi, dan skill **warisan induk** (tidak ada estimasi otomatis yang dikarang); induk **dihapus setelah semua bagian tersimpan**, dan penghapusan dilewati bila ada bagian gagal; lalu `fetchInitialData` memanggil ulang `/api/recommend` sehingga **R2 dan R3 diperiksa kembali per bagian**. Pengguna menentukan sendiri jam tiap bagian.
+
+Batasan jujur: skema tidak menyimpan relasi induk–anak. `tasks` tidak punya kolom `parent_task_id` (dikonfirmasi di `supabase/migrations/001_initial_schema.sql` dan `007_task_management_fr04.sql`). Setelah dipecah, bagian-bagian itu tugas biasa berjudul "(bagian N)". Menambah hierarki butuh migration, dan sesuai instruksi saya **berhenti sebelum migration** dan melaporkannya.
+
+### 9. Status Groq dan Gemini
+
+**0 panggilan live** sepanjang sesi. Seluruh tes live dijalankan dengan gerbang ganda (`RUN_LIVE_API_TESTS=1` plus kunci tersedia) dan dikecualikan dari perintah tes di atas, jadi tidak ada satu pun yang tersentuh. Tidak ada stress test, tidak ada perubahan kunci atau model. Slider, penugasan, what-if, dan matriks tidak memanggil AI sama sekali — halaman hasil tidak mengimpor modul AI, dan `/api/recommend` hanya memanggil embedding (satu permintaan terbatch) plus satu penjelasan.
+
+**Cache embedding dipertahankan**: `lib/scoring/pipeline.ts:52-54` menyaring teks yang sudah ada di cache sebelum memanggil `embedTexts`, sehingga jalankan hangat mencapai Gemini **nol kali**.
+
+### 10. Konflik PRD yang perlu dicatat
+
+PRD v0.3 memakai istilah **"beban ideal"** di R2 tetapi **tidak pernah mendefinisikannya secara formal**. Keputusan pengguna (Opsi A: total estimasi ÷ jumlah anggota yang lolos R1) adalah penafsiran yang dipakai, dan tes mematoknya. Bila pembaca PRD mengartikan "beban ideal" sebagai kapasitas anggota, hasilnya akan berbeda. Ini konflik definisi, bukan bug, dan saya laporkan alih-alih diam-diam memilih.
+
+### 11. Masalah yang masih tersisa
+
+- **Hierarki subtugas** butuh `parent_task_id` + migration. Belum dikerjakan.
+- **Tampilan ponsel belum diverifikasi secara visual.** Tidak ada Playwright/Puppeteer/Cypress/jsdom di `node_modules`, dan `/usr/bin/firefox` adalah stub snap yang rusak. Yang bisa saya buktikan hanya struktural: tab default ringkasan, kelas `max-sm:` untuk target sentuh 44 px, dan kotak gulir terkontrol pada tabel. Belum ada tangkapan layar.
+- **Deployment Vercel belum diverifikasi**: tidak ada URL deployment atau konfigurasi Vercel di repositori.
+- **Label skill bebas tidak diterjemahkan ke taksonomi.** Normalisasi hanya menyamakan bentuk penulisan, bukan makna ("Python" ≠ "pemrograman backend").
+- 26 warning lint lama belum dibersihkan (di luar lingkup).
+
+### Putusan
+
+Rumus R2 sudah sesuai Opsi A dengan presisi penuh, R3 memakai normalisasi skill, penghitungan ganda induk–subtiugas tetap diperbaiki, dan kedua tampilan membaca satu perhitungan yang sama. 41 tes regresi baru mencakup 14 skenario yang diminta dan semuanya lulus dengan aritmetika manual di samping tiap asersi. Gerbang: 601 tes lulus, typecheck 0 error, lint 0 error, build 12 rute. Tiga kesalahan hitung manual saya sendiri ditemukan dan dikoreksi — mesinnya benar. Tidak ada panggilan AI live. Tidak ada commit, push, migration, atau perubahan data production.

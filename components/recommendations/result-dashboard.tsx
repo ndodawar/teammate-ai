@@ -533,8 +533,14 @@ export function MemberLoadRow({
           {name}
           {isAfterSimulation && <span className="ml-1 text-[10px] font-normal text-muted">(simulasi)</span>}
         </span>
+        {/*
+          T-ROOT-CAUSE-03 point 5: "0 / 40 jam" read as if 40 were an actual load.
+          40 is the member's available capacity, so both numbers are labelled:
+          the left one is assigned load, the right one is availability.
+        */}
         <span className="shrink-0 font-mono text-[11px] tabular-nums text-muted" data-numeric>
-          {load.toFixed(1)} / {capacity} jam
+          beban {load.toFixed(1)} jam
+          <span className="text-fog"> · tersedia {capacity} jam</span>
         </span>
       </div>
       <div className="h-[6px] w-full overflow-hidden rounded-full bg-line">

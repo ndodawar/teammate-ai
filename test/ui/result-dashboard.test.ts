@@ -234,7 +234,9 @@ describe('T-UI-MATRIX-01: member load rows state the limit and the verdict', () 
       createElement(MemberLoadRow, { name: 'Budi', load: 2, capacity: 20, capHours: 5 })
     );
     expect(html).toContain('Budi');
-    expect(html).toContain('2.0 / 20 jam');
+    expect(html).toContain('beban 2.0 jam');
+    // The capacity is labelled as availability, not as a load value.
+    expect(html).toContain('tersedia 20 jam');
     expect(html).toContain('Dalam batas');
     expect(html).toContain('data-standing="dalam-batas"');
   });

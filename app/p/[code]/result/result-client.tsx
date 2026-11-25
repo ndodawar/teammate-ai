@@ -407,9 +407,37 @@ export function ResultClient({ params }: { params: Promise<{ code: string }> }) 
         }
       }
 
+      /*
+       * T-ROOT-CAUSE-03: the parent must not survive the split.
+       *
+       * The parts already sum to the parent's estimate, which `validateSplit`
+       * enforces. Leaving the parent in place therefore counted the same work
+       * twice: total effort became parent + parts, which inflated the ideal load
+       * (total ÷ members) and with it the R2 cap, while the parent itself stayed
+       * unassignable and kept its own R2 warning. Removing the parent after every
+       * part is stored is what makes "the sum of the parts equals the original
+       * estimate" true for the workload the engine actually sees.
+       *
+       * Deletion happens last and is skipped if any part failed, so a failed
+       * split never destroys the original task.
+       */
+      const del = await fetch(
+        `/api/projects/${encodeURIComponent(resolvedCode)}/tasks/${encodeURIComponent(parent.id)}`,
+        { method: 'DELETE' }
+      );
+      if (!del.ok) {
+        const json = await del.json().catch(() => ({}));
+        // The parts exist, so the parent staying would double-count. Tell the
+        // reader exactly which task to remove rather than silently regenerating.
+        throw new Error(
+          json.error ||
+            `${parts.length} subtugas dibuat, tetapi tugas induk gagal dihapus. Hapus "${parent.title}" secara manual agar jamnya tidak terhitung dua kali.`
+        );
+      }
+
       setStatus({
         kind: 'ok',
-        text: `${parts.length} subtugas dibuat. Skor dihitung ulang untuk tiap subtugas; tugas induk tetap ${parent.estimated_hours} jam, jadi hapus atau sesuaikan bila sudah tidak dipakai.`,
+        text: `${parent.title} dipecah menjadi ${parts.length} bagian dengan total ${parent.estimated_hours} jam, dan tugas induk sudah dihapus sehingga jamnya tidak terhitung dua kali. Skor dihitung ulang untuk tiap bagian.`,
       });
       setSplitParentId(null);
       setSplitRows([{ hours: '' }, { hours: '' }]);
@@ -967,9 +995,10 @@ export function ResultClient({ params }: { params: Promise<{ code: string }> }) 
             `${overCapText.summary}`,
           hint:
             (feasibleSplit !== null
-              ? `Tiap bagian harus di bawah ${w.capHours.toFixed(2)} jam, jadi minimal ${feasibleSplit} bagian. `
+              ? `Saat ini tiap bagian harus di bawah ${w.capHours.toFixed(2)} jam, jadi minimal ${feasibleSplit} bagian. `
               : '') +
-            'Menambah anggota tidak menyelesaikan masalah ini: beban ideal dihitung dari total jam dibagi jumlah anggota, sehingga anggota bertambah justru membuat batas beban makin kecil.',
+            'Angka batas itu ikut berubah setelah tugas dipecah, karena beban ideal dihitung dari total jam dibagi jumlah anggota: tugas yang dipecah membuat rata-rata per anggota lebih kecil. Periksa lagi hasilnya setelah pemecahan. ' +
+            'Menambah anggota tidak menyelesaikan masalah ini: anggota bertambah justru membuat batas beban makin kecil untuk total jam yang sama.',
         });
       }
 
@@ -1501,8 +1530,9 @@ export function ResultClient({ params }: { params: Promise<{ code: string }> }) 
                   ))}
                 </ul>
                 <p className="mt-3 border-t border-line pt-2.5 text-[11px] leading-relaxed text-muted">
-                  Beban adalah jumlah estimasi jam tugas yang ditugaskan ke anggota. Anggota dengan
-                  jam tersedia 0 tidak ikut dibagi.
+                  Beban = jumlah estimasi jam tugas yang ditugaskan ke anggota. Angka setelah
+                  &ldquo;tersedia&rdquo; adalah kapasitas jam anggota, bukan beban yang sudah dipakai.
+                  Anggota dengan jam tersedia 0 tidak ikut dibagi.
                 </p>
               </section>
 
@@ -2244,7 +2274,8 @@ export function ResultClient({ params }: { params: Promise<{ code: string }> }) 
                   Tentukan sendiri pembagian jamnya. Total semua bagian harus tepat{' '}
                   {parent.estimated_hours} jam; sistem tidak menambah atau mengurangi jam untuk Anda.
                   Setiap bagian disimpan sebagai tugas biasa dengan judul, deskripsi, dan skill yang
-                  sama seperti induk, lalu skornya dihitung ulang satu per satu.
+                  sama seperti induk. Setelah semua bagian tersimpan, tugas induk dihapus agar jamnya
+                  tidak terhitung dua kali, lalu setiap bagian dinilai ulang terhadap R2 dan R3.
                 </p>
 
                 <ul className="space-y-1.5 pt-2">

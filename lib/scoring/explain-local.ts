@@ -1,5 +1,5 @@
 import type { Member, Task, EngineReason, ScoreBreakdown } from './types';
-import { checkR1 } from './rules';
+import { checkR1, skillLevelFor } from './rules';
 
 /**
  * FR-09: a factual sentence about one task/member pair, built only from the
@@ -25,12 +25,14 @@ export interface ReasonInput {
 
 /** Skills the task requires where the member's level reaches the R3 floor (3). */
 export function matchingSkills(task: Task, member: Member): string[] {
-  return task.required_skills.filter((skill) => (member.skills[skill] ?? 0) >= 3);
+  // T-ROOT-CAUSE-03: resolved through the shared normalisation, so the reason
+  // sentence names exactly the skills R3 accepted.
+  return task.required_skills.filter((skill) => skillLevelFor(member, skill) >= 3);
 }
 
 /** Skills the task requires that the member has not rated at all. */
 export function missingSkills(task: Task, member: Member): string[] {
-  return task.required_skills.filter((skill) => (member.skills[skill] ?? 0) === 0);
+  return task.required_skills.filter((skill) => skillLevelFor(member, skill) === 0);
 }
 
 function joinSkills(skills: string[]): string {
