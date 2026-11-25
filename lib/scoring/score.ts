@@ -3,6 +3,24 @@ import { DEFAULT_INTEREST_LEVEL, MAX_SKILL_LEVEL, MAX_INTEREST_LEVEL, EMBEDDING_
 import { skillLevelFor } from './rules';
 
 export function normalizeCosineSimilarity(rawCosine: number): number {
+  /*
+   * A NaN cosine is treated as "no similarity", the documented lower bound,
+   * rather than propagating.
+   *
+   * Written after an audit found that `K(NaN)` returned NaN, which then made
+   * `total` NaN as well: 0.4 × NaN poisons the whole sum. The matrix rendered
+   * "NaN%" and every comparison against the top score became false, so the task
+   * silently lost its owner.
+   *
+   * Only NaN is caught here, not Infinity: +Infinity has a well-defined clamp to
+   * 1 and -Infinity to 0, and rewriting those to 0 would have quietly changed an
+   * answer that was already right.
+   *
+   * Embeddings are validated as finite before they reach here, so this is not
+   * fixing a reachable production path today. It is a guard on an exported
+   * function whose contract is "a number in 0..1".
+   */
+  if (Number.isNaN(rawCosine)) return 0;
   if (rawCosine <= EMBEDDING_COSINE_MIN) return 0;
   if (rawCosine >= EMBEDDING_COSINE_MAX) return 1;
   return (rawCosine - EMBEDDING_COSINE_MIN) / (EMBEDDING_COSINE_MAX - EMBEDDING_COSINE_MIN);
