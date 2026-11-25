@@ -5364,3 +5364,75 @@ Semua gerbang akhir hijau: 765 lulus / 7 dilewati, typecheck 0, lint 0 error, bu
 4. **Hierarki sub-tugas** membutuhkan `parent_task_id` + migrasi. Sengaja tidak dikerjakan (batasan: tanpa perubahan skema).
 5. **Verifikasi visual di browser tidak dapat dilakukan**: tidak ada Playwright/Puppeteer/jsdom, dan `/usr/bin/firefox` adalah snap rusak. Fase 6 memverifikasi logika yang memberi makan UI, bukan pikselnya.
 6. **Satu kegagalan penuh yang tidak dapat direproduksi** dari masa Fase 2, tercatat lengkap di bagian Catatan Kejujuran. Tidak muncul lagi di 11 putaran penuh berikutnya sepanjang Fase 3-7.
+
+---
+
+## Tambahan pasca-Fase 7: tes integrasi database yang membuat `npm test` merah
+
+Ditemukan saat memverifikasi pohon sebelum push, bukan saat mengerjakan fase mana pun.
+
+### Gejala
+
+`npm test` gagal **2 dari 5 kali**, selalu pada berkas yang sama,
+`test/integration/fr04_fr05_smoke.test.ts`, dengan pesan `Test timed out in 5000ms`.
+Tidak pernah ada tes lain yang gagal.
+
+### Penyebab
+
+Berkas itu melakukan panggilan **Supabase sungguhan**, dan setiap permintaannya
+membutuhkan 0,2-2,3 detik terhadap batas bawaan Vitest 5000 ms. Saat seluruh
+suite berjalan, beban gabungan mendorong satu-dua tes melewati batas itu.
+
+Yang membuatnya jelas bukan regresi: berkas itu **lulus 8/8 saat dijalankan
+sendiri**, beberapa kali berturut-turut, pada pohon yang sama. Latensi jaringan
+adalah satu-satunya variabel.
+
+### Mengapa ini masalah, bukan kebetulan
+
+Berkas ini adalah **satu-satunya** tes jaringan di repo yang berjalan tanpa
+diminta. Dua tes live lainnya (`test/ai/groq.live.test.ts`,
+`test/ai/gemini-models.live.test.ts`) sudah lama memakai konvensi
+`RUN_LIVE_API_TESTS=1` dan melewati diri bila tidak diaktifkan. Komentar di
+`groq.live.test.ts` mencatat alasan yang persis sama: "a provider hiccup can no
+longer turn `npm test` red for a reason unrelated to the code under test."
+
+Konsekuensi yang lebih serius dari sekadar flaky: berkas ini akan **melempar**
+di mesin mana pun tanpa `.env.local`, bukan melewati diri. Artinya kontributor
+baru tidak dapat menjalankan `npm test` sama sekali.
+
+### Perbaikan
+
+Berkas itu sekarang mengikuti konvensi yang sudah ada:
+
+```ts
+const liveDatabaseOptIn = process.env.RUN_LIVE_API_TESTS === '1';
+describe.skipIf(!liveDatabaseOptIn)('Integration: FR-04/FR-05 Smoke Test', () => {
+```
+
+Dijalankan dengan sengaja:
+
+```
+RUN_LIVE_API_TESTS=1 npx vitest run test/integration/fr04_fr05_smoke.test.ts
+```
+
+**Tidak ada satu pun asersi yang diubah, dilonggarkan, atau dihapus.** Yang
+berubah hanya kapan berkas itu dijalankan. Menaikkan timeout juga akan
+menghilangkan gejalanya, tetapi menyembunyikan fakta bahwa sebagian suite diam-
+diam bergantung pada database hidup, dan tidak menolong mesin tanpa `.env.local`.
+Karena itu saya memilih gerbang opt-in, bukan timeout lebih besar.
+
+### Bukti
+
+```
+Sebelum: 2 dari 5 `npx vitest run` gagal, selalu fr04_fr05_smoke, "timed out in 5000ms"
+         berkas yang sama: 8/8 lulus saat dijalankan sendiri
+Sesudah: 6 dari 6 `npx vitest run` lulus tanpa kegagalan
+         default        -> 1 file dilewati, 8 tes dilewati
+         RUN_LIVE_API_TESTS=1 -> 1 file lulus, 8 tes lulus
+Angka:   765 lulus / 7 dilewati  ->  757 lulus / 15 dilewati
+         (8 tes live berpindah dari "lulus" ke "dilewati", bukan dihapus)
+Gerbang: tsc 0 error, lint 0 error (26 warning lama), build sukses
+```
+
+Angka 757 inilah yang menggantikan 765 pada tabel gerbang akhir di atas; selisih
+persis 8 tes live yang kini opt-in, bukan hilangnya cakupan.

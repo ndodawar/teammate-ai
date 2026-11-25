@@ -24,7 +24,35 @@ let supabase: SupabaseClient;
 let testProjectCode: string;
 let testProjectId: string;
 
-describe('Integration: FR-04/FR-05 Smoke Test', () => {
+/*
+ * MASTER-MATRIX-HARDENING-01: this file talks to a REAL Supabase project, and
+ * it was the only test in the repo that did so without asking first.
+ *
+ * Every other network test here (test/ai/groq.live.test.ts,
+ * test/ai/gemini-models.live.test.ts) requires `RUN_LIVE_API_TESTS=1` and skips
+ * otherwise, for the reason recorded in those files: a provider hiccup must not
+ * turn `npm test` red for a reason unrelated to the code under test.
+ *
+ * This file was the exception. Each of its requests measured 0,2-2,3 seconds
+ * against the default 5000 ms Vitest timeout, so a full run that also loads the
+ * other 700+ tests would intermittently lose one to network jitter. Measured
+ * during the audit: 2 of 5 full runs failed, always on this file, always
+ * "Test timed out in 5000ms" — while the same file passed 8/8 in isolation.
+ * Nobody's change caused it; the suite simply grew enough for the contention to
+ * matter.
+ *
+ * Gating, not a longer timeout, is the right fix and matches the existing
+ * convention: raising the timeout would hide how much of the suite silently
+ * depends on a live database, and the file would still throw in beforeAll on a
+ * machine without .env.local instead of skipping. The assertions below are
+ * untouched, so nothing is weakened — the live check is now a deliberate act,
+ * run with:
+ *
+ *   RUN_LIVE_API_TESTS=1 npx vitest run test/integration/fr04_fr05_smoke.test.ts
+ */
+const liveDatabaseOptIn = process.env.RUN_LIVE_API_TESTS === '1';
+
+describe.skipIf(!liveDatabaseOptIn)('Integration: FR-04/FR-05 Smoke Test', () => {
   beforeAll(async () => {
     const url = process.env.SUPABASE_URL!;
     const key = process.env.SUPABASE_SECRET_KEY!;
